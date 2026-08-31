@@ -1,0 +1,43 @@
+import { useAuth } from "@/_core/hooks/useAuth";
+import PlatformShell from "@/components/PlatformShell";
+import { resolveNewsArticlePresentation } from "@/lib/newsArticle";
+import { trpc } from "@/lib/trpc";
+import { sortNewsTimeline } from "../../../shared/newsSignals";
+import { ArrowLeft, ArrowRight, Bookmark, Clock3, ExternalLink, Eye, FileText, Loader2, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
+import { Streamdown } from "streamdown";
+import { useLocation, useRoute } from "wouter";
+
+function formatTime(value: Date | string | null) { return value ? new Date(value).toLocaleString("zh-CN", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "时间待补充"; }
+function timelineTime(value: Date | string | null) { if (!value) return "时间待补充"; const hours = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 3_600_000)); if (hours < 1) return "刚刚"; if (hours < 24) return `${hours} 小时前`; if (hours < 48) return "昨天"; return new Date(value).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }); }
+
+export default function NewsArticle() {
+  const [, params] = useRoute("/news/:id"); const [, setLocation] = useLocation(); const { user } = useAuth(); const { data, isLoading } = trpc.platform.catalog.useQuery(); const utils = trpc.useUtils(); const recordRead = trpc.platform.personal.recordNewsRead.useMutation({ onSuccess: () => utils.platform.catalog.invalidate() });
+  const currentId = Number(params?.id);
+  // 与资讯中心一致的时间线排序，供左侧列表与上一篇/下一篇导航复用。
+  const timeline = useMemo(() => data ? sortNewsTimeline(data.news.map(row => ({ ...row, publishedAt: row.item.publishedAt ?? row.item.createdAt, valueTier: row.item.valueTier, readCount: row.item.readCount, favoriteCount: row.item.favoriteCount })), "latest") : [], [data]);
+  const currentIndex = timeline.findIndex(row => row.item.id === currentId);
+  const result = currentIndex >= 0 ? timeline[currentIndex] : data?.news.find(({ item }) => item.id === currentId);
+  const newer = currentIndex > 0 ? timeline[currentIndex - 1] : null;
+  const older = currentIndex >= 0 && currentIndex < timeline.length - 1 ? timeline[currentIndex + 1] : null;
+  const activeRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => { if (user && result) recordRead.mutate({ newsId: result.item.id }); }, [user?.id, result?.item.id]);
+  useEffect(() => { window.scrollTo({ top: 0 }); }, [currentId]);
+  useEffect(() => { activeRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" }); }, [currentId, timeline.length]);
+  if (isLoading || !data) return <PlatformShell><div className="grid min-h-[70vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div></PlatformShell>;
+  if (!result) return <PlatformShell><div className="mx-auto max-w-3xl px-4 py-20"><h1 className="font-serif text-3xl">该资讯暂不可阅读</h1><button onClick={() => setLocation("/news")} className="mt-6 rounded-lg bg-violet-700 px-4 py-2 text-sm text-white">返回资讯中心</button></div></PlatformShell>;
+  const { item, sourceName } = result; const presentation = resolveNewsArticlePresentation(item);
+  return <PlatformShell><main className="mx-auto flex max-w-[1440px] flex-col gap-5 px-4 py-7 lg:flex-row lg:gap-7 lg:px-7">
+    <aside className="lg:w-[330px] lg:shrink-0" aria-label="资讯列表">
+      <div className="lg:sticky lg:top-20"><div className="flex items-center justify-between px-1 pb-3"><p className="text-sm font-semibold text-slate-700">资讯列表</p><span className="text-xs text-slate-400">{timeline.length} 条 · 按时间排序</span></div>
+      <div className="flex snap-x gap-3 overflow-x-auto pb-3 lg:max-h-[calc(100vh-11rem)] lg:flex-col lg:gap-2 lg:overflow-y-auto lg:pb-1 lg:pr-1">
+        {timeline.map(row => { const active = row.item.id === item.id; return <button key={row.item.id} ref={active ? activeRef : undefined} onClick={() => setLocation(`/news/${row.item.id}`)} className={`w-64 shrink-0 snap-start rounded-2xl border p-4 text-left transition-colors lg:w-full ${active ? "border-violet-300 bg-violet-50/80 shadow-sm" : "border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/40"}`}><span className="flex items-center gap-2 text-[11px] text-slate-400"><Clock3 className="h-3 w-3" />{timelineTime(row.item.publishedAt ?? row.item.createdAt)}<span className="truncate">{row.sourceName || "平台运营"}</span>{row.item.isFullText && <span className="rounded bg-amber-100 px-1 py-0.5 font-semibold text-amber-700">全文</span>}</span><span className={`mt-1.5 line-clamp-2 block text-sm font-medium leading-6 ${active ? "text-violet-800" : "text-slate-700"}`}>{row.item.title}</span><span className="mt-1.5 flex items-center gap-3 text-[11px] text-slate-400"><span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" />{row.item.readCount}</span><span className="inline-flex items-center gap-1"><Bookmark className="h-3 w-3" />{row.item.favoriteCount}</span></span></button>; })}
+      </div></div>
+    </aside>
+    <section className="min-w-0 flex-1">
+      <button onClick={() => setLocation("/news")} className="flex items-center text-sm text-slate-500 transition-colors hover:text-violet-700"><ArrowLeft className="mr-2 h-4 w-4" />返回资讯中心</button>
+      <article className="mt-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-10 lg:p-12"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">{item.category}</span><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{item.valueTier}</span>{item.isFullText && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700"><FileText className="h-3 w-3" />精选全文</span>}</div><h1 className="mt-6 font-serif text-3xl font-semibold leading-snug tracking-tight md:text-4xl">{item.title}</h1><div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-slate-100 pb-5 text-xs text-slate-400"><span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{formatTime(item.publishedAt ?? item.createdAt)}</span><span className="inline-flex items-center gap-1.5"><Eye className="h-3.5 w-3.5" />{item.readCount} 位员工已阅读</span><span className="inline-flex items-center gap-1.5"><Bookmark className="h-3.5 w-3.5" />{item.favoriteCount} 次收藏</span><span className="inline-flex items-center gap-1.5 text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" />审核状态：{item.reviewStatus}</span></div><p className="mt-6 rounded-2xl bg-slate-50 px-5 py-4 text-[15px] leading-7 text-slate-600">{item.summary}</p><div className="mt-8 prose prose-slate max-w-none text-base leading-[1.95] tracking-[.01em] prose-headings:font-serif prose-headings:tracking-normal prose-p:my-4 prose-a:font-medium prose-a:text-violet-700 prose-img:rounded-2xl prose-img:border prose-img:border-slate-200 prose-img:shadow-sm"><Streamdown>{presentation.body}</Streamdown></div><div className="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5 text-sm text-slate-500"><span>来源：{sourceName || "平台运营"}</span>{presentation.sourceUrl && <a href={presentation.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-4 py-1.5 font-medium text-violet-700 transition-colors hover:bg-violet-100">查看原文 <ExternalLink className="h-3.5 w-3.5" /></a>}</div></article>
+      <nav className="mt-5 grid gap-3 sm:grid-cols-2" aria-label="上一篇下一篇">{newer ? <button onClick={() => setLocation(`/news/${newer.item.id}`)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-violet-200 hover:bg-violet-50/40"><span className="flex items-center gap-1 text-xs font-semibold text-slate-400"><ArrowLeft className="h-3.5 w-3.5" />上一篇（更新）</span><span className="mt-1.5 line-clamp-1 block text-sm font-medium text-slate-700 group-hover:text-violet-700">{newer.item.title}</span></button> : <span />}{older ? <button onClick={() => setLocation(`/news/${older.item.id}`)} className="group rounded-2xl border border-slate-200 bg-white p-4 text-right transition-colors hover:border-violet-200 hover:bg-violet-50/40"><span className="flex items-center justify-end gap-1 text-xs font-semibold text-slate-400">下一篇（更早）<ArrowRight className="h-3.5 w-3.5" /></span><span className="mt-1.5 line-clamp-1 block text-sm font-medium text-slate-700 group-hover:text-violet-700">{older.item.title}</span></button> : <span />}</nav>
+    </section>
+  </main></PlatformShell>;
+}

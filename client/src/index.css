@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Serif+Display:ital@0;1&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-card-foreground: var(--card-foreground); --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground); --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground); --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground); --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground); --color-destructive: var(--destructive); --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring); --radius-sm: calc(var(--radius) - 4px); --radius-md: calc(var(--radius) - 2px); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) + 4px); --font-sans: "Manrope", "Noto Sans SC", sans-serif; --font-serif: "DM Serif Display", "Noto Serif SC", serif; --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+:root { --radius: 0.8rem; --background: oklch(0.978 0.008 290); --foreground: oklch(0.18 0.025 280); --card: oklch(1 0 0); --card-foreground: oklch(0.18 0.025 280); --popover: oklch(1 0 0); --popover-foreground: oklch(0.18 0.025 280); --primary: oklch(0.46 0.21 285); --primary-foreground: oklch(0.985 0 0); --secondary: oklch(0.955 0.02 280); --secondary-foreground: oklch(0.28 0.04 280); --muted: oklch(0.96 0.012 280); --muted-foreground: oklch(0.5 0.03 280); --accent: oklch(0.96 0.025 285); --accent-foreground: oklch(0.34 0.12 285); --destructive: oklch(0.58 0.23 25); --border: oklch(0.91 0.015 280); --input: oklch(0.91 0.015 280); --ring: oklch(0.57 0.18 285); }
+
+* { border-color: var(--border); }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; font-family: "Manrope", "Noto Sans SC", sans-serif; background: #f8f7ff; color: #1f1a35; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+button:active { transform: scale(.97); }
+.font-serif { font-family: "DM Serif Display", "Noto Serif SC", serif; }
+.hero-orb { position: absolute; border-radius: 999px; filter: blur(60px); pointer-events: none; }
+.section-kicker { color: #7656dd; font-size: 11px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; }
+.section-title { margin-top: .6rem; font-family: "DM Serif Display", "Noto Serif SC", serif; font-size: clamp(2.35rem, 4vw, 4rem); font-weight: 400; line-height: .98; letter-spacing: -.035em; }
+.text-gradient { background: linear-gradient(100deg, #6d28d9 0%, #4f46e5 48%, #0891b2 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.rich-editor:empty::before { content: attr(data-placeholder); color: #94a3b8; pointer-events: none; }
+.rich-editor img { max-height: 280px; max-width: 100%; border-radius: .75rem; margin: .75rem 0; object-fit: contain; }
+.rich-editor blockquote, .rich-content blockquote { border-left: 3px solid #8b5cf6; margin: .75rem 0; padding-left: .9rem; color: #64748b; }
+.rich-content img { max-width: 100%; border-radius: .75rem; margin: .75rem 0; }
+.rich-content a { color: #6d28d9; text-decoration: underline; }
+@media (prefers-reduced-motion: no-preference) { article, button, a { transition-duration: 180ms; transition-timing-function: cubic-bezier(.23, 1, .32, 1); } }
+@media (max-width: 640px) { .section-title { font-size: 2.65rem; } }

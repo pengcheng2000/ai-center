@@ -1,0 +1,15 @@
+{
+  "targetType": "news",
+  "idempotencyKey": "replace-with-stable-source-content-hash",
+  "sourceUrl": "https://replace-with-authorized-source.example/article",
+  "sourceTitle": "原始文章标题",
+  "assetIds": [123],
+  "payload": {
+    "title": "准确、面向员工的文章标题",
+    "summary": "以两三句话交代文章重点、适用对象和来源价值。",
+    "contentMarkdown": "## 为什么值得关注\n\n简洁说明。\n\n## 关键要点\n\n- 要点一\n- 要点二\n\n![图像替代文字]({{asset:123}})\n\n> 来源要点或必要说明。",
+    "category": "模型趋势",
+    "tags": ["标签一", "标签二"],
+    "publishedAt": "2026-08-27T02:00:00.000Z"
+  }
+}
