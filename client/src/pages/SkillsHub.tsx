@@ -6,21 +6,33 @@ import { Input } from "@/components/ui/input";
 import { startLogin } from "@/const";
 import { skillVisual } from "@/lib/skillVisual";
 import { trpc } from "@/lib/trpc";
-import { BookOpenCheck, Loader2, LockKeyhole, Plus, Puzzle, Search, Star } from "lucide-react";
-import { useState } from "react";
+import { ArrowUpRight, BookOpenCheck, LayoutGrid, Loader2, LockKeyhole, Plus, Puzzle, Rows3, Search, Star } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
 type SortMode = "recent" | "rating";
+
+const SORT_OPTIONS: { value: SortMode; label: string }[] = [
+  { value: "recent", label: "最新上架" },
+  { value: "rating", label: "评分优先" },
+];
 
 export default function SkillsHub() {
   const { isAuthenticated, loading } = useAuth();
   const [, setLocation] = useLocation();
   const [keyword, setKeyword] = useState("");
+  const [debounced, setDebounced] = useState("");
   const [category, setCategory] = useState<string | undefined>();
   const [sort, setSort] = useState<SortMode>("recent");
+  const [view, setView] = useState<"grid" | "list">("grid");
   const { data: categories } = trpc.platform.skills.categories.useQuery(undefined, { enabled: isAuthenticated });
-  const { data, isLoading } = trpc.platform.skills.list.useQuery({ keyword: keyword || undefined, category, sort }, { enabled: isAuthenticated });
+  const { data, isLoading } = trpc.platform.skills.list.useQuery({ keyword: debounced || undefined, category, sort }, { enabled: isAuthenticated });
   const { data: mySubmissions } = trpc.platform.skills.mySubmissions.useQuery(undefined, { enabled: isAuthenticated });
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(keyword.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [keyword]);
 
   if (loading || (isAuthenticated && isLoading))
     return <PlatformShell><div className="grid min-h-[65vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div></PlatformShell>;
@@ -83,18 +95,28 @@ export default function SkillsHub() {
         ) : null}
 
         <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
               <Input value={keyword} onChange={event => setKeyword(event.target.value)} className="pl-9" placeholder="搜索名称、标识、说明或标签" />
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-500">
-              <span>排序</span>
-              <select value={sort} onChange={event => setSort(event.target.value as SortMode)} className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-violet-200">
-                <option value="recent">最新上架</option>
-                <option value="rating">评分优先</option>
-              </select>
-            </label>
+            <div className="flex items-center gap-2">
+              {SORT_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  onClick={() => setSort(option.value)}
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${sort === option.value ? "bg-violet-100 text-violet-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}
+                  aria-pressed={sort === option.value}
+                >
+                  {option.label}
+                </button>
+              ))}
+              <span className="mx-1 hidden h-5 w-px bg-slate-200 lg:block" />
+              <div className="flex rounded-lg border border-slate-200 p-0.5" role="group" aria-label="视图切换">
+                <button onClick={() => setView("grid")} aria-label="卡片视图" aria-pressed={view === "grid"} className={`grid h-7 w-8 place-items-center rounded-md transition ${view === "grid" ? "bg-violet-100 text-violet-700" : "text-slate-400 hover:text-slate-700"}`}><LayoutGrid className="h-4 w-4" /></button>
+                <button onClick={() => setView("list")} aria-label="列表视图" aria-pressed={view === "list"} className={`grid h-7 w-8 place-items-center rounded-md transition ${view === "list" ? "bg-violet-100 text-violet-700" : "text-slate-400 hover:text-slate-700"}`}><Rows3 className="h-4 w-4" /></button>
+              </div>
+            </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button onClick={() => setCategory(undefined)} size="sm" variant={!category ? "default" : "outline"} className="rounded-full">全部类型</Button>
@@ -104,21 +126,35 @@ export default function SkillsHub() {
           </div>
         </section>
 
-        <p className="mt-4 text-sm text-slate-500">找到 {data?.length ?? 0} 个已上架 Skills{keyword ? ` · “${keyword}”` : ""}{category ? ` · ${category}` : ""}</p>
-        <section className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {data?.map(({ skill, authorName, averageRating, reviewCount }) => (
-            <SkillCard key={skill.id} skill={skill} authorName={authorName} averageRating={averageRating} reviewCount={reviewCount} onOpen={() => setLocation(`/skills/${skill.id}`)} />
-          ))}
-          {!data?.length && (
-            <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
-              <BookOpenCheck className="mx-auto h-6 w-6 text-violet-600" />
-              <h2 className="mt-3 font-semibold">尚无匹配的已上架 Skills</h2>
-              <p className="mt-2 text-sm text-slate-500">尝试更换关键词或分类；也可以分享第一个 Skills，提交后会进入运营审核。</p>
-            </div>
-          )}
-        </section>
+        <p className="mt-4 text-sm text-slate-500">找到 {data?.length ?? 0} 个已上架 Skills{debounced ? ` · “${debounced}”` : ""}{category ? ` · ${category}` : ""}</p>
+
+        {view === "grid" ? (
+          <section className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {data?.map(({ skill, authorName, averageRating, reviewCount }) => (
+              <SkillCard key={skill.id} skill={skill} authorName={authorName} averageRating={averageRating} reviewCount={reviewCount} onOpen={() => setLocation(`/skills/${skill.id}`)} />
+            ))}
+            {!data?.length && <EmptyResult />}
+          </section>
+        ) : (
+          <section className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {data?.map(({ skill, authorName, averageRating, reviewCount }, index) => (
+              <SkillRow key={skill.id} skill={skill} authorName={authorName} averageRating={averageRating} reviewCount={reviewCount} onOpen={() => setLocation(`/skills/${skill.id}`)} divider={index > 0} />
+            ))}
+            {!data?.length && <div className="p-6"><EmptyResult /></div>}
+          </section>
+        )}
       </main>
     </PlatformShell>
+  );
+}
+
+function EmptyResult() {
+  return (
+    <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+      <BookOpenCheck className="mx-auto h-6 w-6 text-violet-600" />
+      <h2 className="mt-3 font-semibold">尚无匹配的已上架 Skills</h2>
+      <p className="mt-2 text-sm text-slate-500">尝试更换关键词或分类；也可以分享第一个 Skills，提交后会进入运营审核。</p>
+    </div>
   );
 }
 
@@ -145,9 +181,7 @@ function SkillCard({ skill, authorName, averageRating, reviewCount, onOpen }: {
       className="group flex h-full cursor-pointer flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
     >
       <div className="flex items-start justify-between gap-3">
-        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform duration-300 group-hover:scale-105 ${hue}`}>
-          <Icon className="h-5 w-5" />
-        </span>
+        <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-transform duration-300 group-hover:scale-105 ${hue}`}><Icon className="h-5 w-5" /></span>
         <Badge variant="secondary" className="max-w-[60%]"><span className="truncate">{skill.category}</span></Badge>
       </div>
       <h2 className="mt-4 truncate text-base font-bold text-slate-900" title={skill.name}>{skill.name}</h2>
@@ -173,6 +207,42 @@ function SkillCard({ skill, authorName, averageRating, reviewCount, onOpen }: {
         </div>
       </div>
     </article>
+  );
+}
+
+/** 列表视图：单行高密度排布（图标 + 名称/标识 + 摘要 + 评分 + 分类 + 进入箭头），适合快速扫读比较 */
+function SkillRow({ skill, authorName, averageRating, reviewCount, onOpen, divider }: {
+  skill: { name: string; skillKey: string; version: string; summary: string; category: string; tags: string[] };
+  authorName: string | null;
+  averageRating: number;
+  reviewCount: number;
+  onOpen: () => void;
+  divider: boolean;
+}) {
+  const { Icon, hue } = skillVisual(skill.skillKey);
+  const rating = Number(averageRating);
+  return (
+    <button
+      onClick={onOpen}
+      className={`group flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-violet-50/50 ${divider ? "border-t border-slate-100" : ""}`}
+    >
+      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${hue}`}><Icon className="h-4.5 w-4.5" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-2">
+          <span className="truncate font-semibold text-slate-900">{skill.name}</span>
+          <span className="hidden shrink-0 font-mono text-xs text-slate-400 md:inline">{skill.version}</span>
+        </span>
+        <span className="mt-0.5 block truncate text-sm text-slate-500">{skill.summary}</span>
+      </span>
+      <span className="hidden w-28 shrink-0 items-center gap-1 text-sm font-semibold text-amber-500 lg:flex">
+        <Star className="h-3.5 w-3.5 fill-current" />
+        {rating ? rating.toFixed(1) : <span className="text-xs font-normal text-slate-400">暂无评分</span>}
+        {reviewCount > 0 && <span className="text-xs font-normal text-slate-400">({reviewCount})</span>}
+      </span>
+      <Badge variant="secondary" className="hidden shrink-0 xl:inline-flex"><span className="max-w-24 truncate">{skill.category}</span></Badge>
+      <span className="hidden w-20 shrink-0 truncate text-right text-xs text-slate-400 2xl:block">{authorName || "企业成员"}</span>
+      <ArrowUpRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-violet-600" />
+    </button>
   );
 }
 

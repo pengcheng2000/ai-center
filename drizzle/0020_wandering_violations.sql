@@ -1,0 +1,1 @@
+ALTER TABLE `courseMaterialComments` ADD `isDanmaku` int DEFAULT 0 NOT NULL;

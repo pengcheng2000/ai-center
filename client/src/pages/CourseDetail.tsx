@@ -1,26 +1,257 @@
+// 课程学习页：左栏为学习内容（视频/PDF/文档/实操），右栏为学习导航（素材清单+进度+交流）。
+// 素材进度自动上报并汇总为课程进度，全素材完成后自动标记课程完成。
 import PlatformShell from "@/components/PlatformShell";
+import DiscussionPanel from "@/components/learn/DiscussionPanel";
+import DocReader from "@/components/learn/DocReader";
+import PdfReader, { type Annotation } from "@/components/learn/PdfReader";
+import VideoPlayer from "@/components/learn/VideoPlayer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { resolveDocumentDisplay, VIDEO_PLAYBACK_SPEEDS } from "@/lib/courseExperience";
-import { ArrowLeft, CheckCircle2, Clock3, ExternalLink, FileText, Loader2, MessageCircle, PlayCircle, Send, Sparkles, Video } from "lucide-react";
-import { Streamdown } from "streamdown";
-import { useMemo, useRef, useState } from "react";
+import { clampPercent, formatClock, materialKindOf, MATERIAL_KIND_LABEL, progressState, resolveDocumentDisplay, videoPercent, VIDEO_PLAYBACK_SPEEDS } from "@/lib/learnExperience";
+import { cn } from "@/lib/utils";
+import { workbenchRoutes } from "@/lib/routes";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { ArrowLeft, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileText, Highlighter, ListChecks, Loader2, PlayCircle, Settings2, Sparkles, Video } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
+import { Streamdown } from "streamdown";
+import { toast } from "sonner";
 
 type Material = { id: number; materialType: "document" | "video" | "practice"; sourceType: "url" | "file" | "inline"; title: string; description: string | null; sourceUrl: string | null; signedUrl: string | null; mimeType: string | null; content: string | null; config: Record<string, unknown>; orderIndex: number };
+type CommentRow = { comment: { id: number; materialId: number; content: string; videoSecond: number | null; isDanmaku: number; createdAt: Date }; authorName: string | null };
+type ProgressRow = { id: number; userId: number; materialId: number; position: number; percent: number; minutes: number };
+
 export default function CourseDetail() {
-  const [, params] = useRoute("/learn/:pathId/course/:courseId"); const [, setLocation] = useLocation(); const pathId = Number(params?.pathId); const courseId = Number(params?.courseId); const { data: catalog, isLoading } = trpc.platform.catalog.useQuery(); const { data: personal } = trpc.platform.personal.get.useQuery(); const { data: experience } = trpc.platform.learning.courseExperience.useQuery({ courseId }, { enabled: Number.isInteger(courseId) && courseId > 0 }); const utils = trpc.useUtils(); const update = trpc.platform.personal.updateProgress.useMutation({ onSuccess: () => utils.platform.personal.get.invalidate() });
-  const progress = useMemo(() => new Map((personal?.progress ?? []).map(item => [item.courseId, item.progress])), [personal?.progress]);
+  const [, params] = useRoute("/learn/:pathId/course/:courseId");
+  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const pathId = Number(params?.pathId);
+  const courseId = Number(params?.courseId);
+  const { data: catalog, isLoading } = trpc.platform.catalog.useQuery();
+  const { data: experience } = trpc.platform.learning.courseExperience.useQuery({ courseId }, { enabled: Number.isInteger(courseId) && courseId > 0 });
+  const utils = trpc.useUtils();
+  const saveProgress = trpc.platform.learning.saveMaterialProgress.useMutation({
+    onSuccess: result => { setShownCoursePercent(result.coursePercent); void utils.platform.personal.get.invalidate(); },
+  });
+  const [activeId, setActiveId] = useState<number | null>(null);
+  const [shownCoursePercent, setShownCoursePercent] = useState<number | null>(null);
+  const materialEnterRef = useRef<Map<number, number>>(new Map());
+  // 学习分钟数按“距上次上报的增量”累计：视频用累计播放秒，PDF/文档用页面停留秒，避免重复累计。
+  const minutesReportRef = useRef<Map<number, number>>(new Map());
+
+  const materials = experience?.materials as Material[] | undefined;
+  const comments = (experience?.comments ?? []) as CommentRow[];
+  const materialProgress = (experience?.materialProgress ?? []) as ProgressRow[];
+  const annotations = (experience?.annotations ?? []) as Annotation[];
+
+  const progressByMaterial = useMemo(() => new Map(materialProgress.map(item => [item.materialId, item])), [materialProgress]);
+  const activeMaterial = useMemo(() => {
+    if (!materials?.length) return null;
+    return materials.find(item => item.id === activeId) ?? materials.find(item => (progressByMaterial.get(item.id)?.percent ?? 0) < 100) ?? materials[0];
+  }, [materials, activeId, progressByMaterial]);
+
+  // 进入素材时记录开始时间，用于换算学习分钟数。
+  const beginMaterial = useCallback((materialId: number) => {
+    if (!materialEnterRef.current.has(materialId)) materialEnterRef.current.set(materialId, Date.now());
+  }, []);
+
+  // 素材进度统一入口：position 视素材类型为秒数/页码/百分比；watchedSeconds 为本会话累计秒（缺省按页面停留时长）。
+  const reportProgress = useCallback((material: Material, payload: { position: number; percent?: number; watchedSeconds?: number }) => {
+    const enterAt = materialEnterRef.current.get(material.id) ?? Date.now();
+    if (!materialEnterRef.current.has(material.id)) materialEnterRef.current.set(material.id, enterAt);
+    const elapsedSeconds = payload.watchedSeconds ?? Math.floor((Date.now() - enterAt) / 1000);
+    const previous = minutesReportRef.current.get(material.id) ?? 0;
+    const minutesDelta = Math.max(0, Math.floor(elapsedSeconds / 60) - Math.floor(previous / 60));
+    minutesReportRef.current.set(material.id, elapsedSeconds);
+    saveProgress.mutate({ materialId: material.id, position: payload.position, percent: clampPercent(payload.percent ?? 0), minutesDelta });
+  }, [saveProgress]);
+
   if (isLoading || !catalog) return <PlatformShell><div className="grid min-h-[70vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div></PlatformShell>;
-  const path = catalog.paths.find(item => item.id === pathId); const course = catalog.courses.find(item => item.id === courseId && item.pathId === pathId);
-  if (!path || !course) return <PlatformShell><main className="mx-auto max-w-3xl px-4 py-20"><h1 className="font-serif text-3xl">该课程暂不可用</h1><Button onClick={() => setLocation(`/learn/${pathId}`)} className="mt-6">返回学习路径</Button></main></PlatformShell>;
-  const done = progress.get(course.id) === 100; const Icon = course.resourceType === "video" ? Video : course.resourceType === "article" ? FileText : PlayCircle; const materials = experience?.materials as Material[] | undefined;
-  return <PlatformShell><main className="mx-auto max-w-4xl px-4 py-8"><button onClick={() => setLocation(`/learn/${pathId}`)} className="flex items-center text-sm text-slate-500 hover:text-violet-700"><ArrowLeft className="mr-2 h-4 w-4" />返回「{path.title}」</button><article className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="bg-gradient-to-br from-slate-950 to-indigo-950 p-7 text-white md:p-10"><div className="flex items-start justify-between gap-5"><div><p className="text-xs font-bold tracking-[.16em] text-violet-300">COURSE / {path.category}</p><h1 className="mt-3 font-serif text-4xl">{course.title}</h1><p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300">{course.summary}</p></div><span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/10"><Icon className="h-6 w-6 text-violet-200" /></span></div><div className="mt-7 flex flex-wrap gap-2"><Badge className="bg-white/10 text-violet-100 hover:bg-white/10">{course.resourceType}</Badge><span className="flex items-center rounded-full bg-white/10 px-3 py-1 text-xs text-slate-200"><Clock3 className="mr-1.5 h-3.5 w-3.5" />{course.duration}</span>{(course.tags as string[]).map(tag => <Badge key={tag} className="bg-white/10 text-violet-100 hover:bg-white/10">{tag}</Badge>)}</div></div><div className="p-6 md:p-8"><h2 className="text-lg font-semibold">本节学习资源</h2><p className="mt-2 text-sm text-slate-500">资源可由内容负责人持续替换；视频评论与模型实操结果只对你的学习过程可见。</p><div className="mt-5 space-y-5">{materials?.length ? materials.map(material => <MaterialPanel key={material.id} material={material} comments={experience?.comments ?? []} runs={experience?.runs ?? []} />) : course.resourceUrl ? <a href={course.resourceUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-5 py-4 text-sm font-semibold text-violet-800 transition hover:bg-violet-100"><span>打开课程资源</span><ExternalLink className="h-4 w-4" /></a> : <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">课程资源正在复审或维护中，完成阅读说明后可先标记学习进度。</div>}</div><div className="mt-8 flex flex-col gap-4 rounded-xl border border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">完成状态</p><p className="mt-1 text-sm text-slate-500">{done ? "你已完成本节任务，可继续浏览路径其他内容。" : "完成阅读、观看或实操后，标记为已完成。"}</p></div><Button disabled={done || update.isPending} onClick={() => update.mutate({ courseId: course.id, progress: 100 })} className="rounded-lg">{done ? <><CheckCircle2 className="mr-2 h-4 w-4" />已完成</> : "标记为完成"}</Button></div><Progress value={done ? 100 : 0} className="mt-4 h-1.5" /></div></article></main></PlatformShell>;
+  const path = catalog.paths.find(item => item.id === pathId);
+  const course = catalog.courses.find(item => item.id === courseId && item.pathId === pathId);
+  if (!path || !course) return <PlatformShell><main className="mx-auto max-w-3xl px-4 py-20"><h1 className="font-serif text-3xl">该课程暂不可用</h1><Button onClick={() => setLocation(`/learn/${pathId}`)} className="mt-6 rounded-lg">返回学习路径</Button></main></PlatformShell>;
+
+  const coursePercent = shownCoursePercent ?? experience?.courseProgressRow?.progress ?? 0;
+  const courseState = progressState(coursePercent);
+  const Icon = course.resourceType === "video" ? Video : course.resourceType === "article" ? FileText : PlayCircle;
+  const pathCourses = catalog.courses.filter(item => item.pathId === pathId);
+  const courseIndex = pathCourses.findIndex(item => item.id === courseId);
+  const prevCourse = courseIndex > 0 ? pathCourses[courseIndex - 1] : null;
+  const nextCourse = courseIndex >= 0 && courseIndex < pathCourses.length - 1 ? pathCourses[courseIndex + 1] : null;
+
+  return <PlatformShell>
+    <main className="mx-auto max-w-[1440px] px-4 py-7 lg:px-7">
+      <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+        <button onClick={() => setLocation("/learn")} className="hover:text-violet-700">学习中心</button>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <button onClick={() => setLocation(workbenchRoutes.learningPath(pathId))} className="max-w-64 truncate hover:text-violet-700">{path.title}</button>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="max-w-72 truncate font-medium text-slate-800">{course.title}</span>
+      </div>
+
+      <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        {/* 左栏：学习内容 */}
+        <div className="min-w-0">
+          <div className="rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-950 p-6 text-white md:p-8">
+            <div className="flex items-start justify-between gap-5">
+              <div className="min-w-0">
+                <p className="text-xs font-bold tracking-[.16em] text-violet-300">COURSE / {path.category}</p>
+                <h1 className="mt-2.5 font-serif text-3xl leading-tight md:text-4xl">{course.title}</h1>
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">{course.summary}</p>
+              </div>
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/10"><Icon className="h-6 w-6 text-violet-200" /></span>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <span className="flex items-center rounded-full bg-white/10 px-3 py-1 text-xs text-slate-200"><Clock3 className="mr-1.5 h-3.5 w-3.5" />{course.duration}</span>
+              {(course.tags as string[]).slice(0, 4).map(tag => <Badge key={tag} className="bg-white/10 text-violet-100 hover:bg-white/10">{tag}</Badge>)}
+              <span className={cn("ml-auto rounded-full px-3 py-1 text-xs font-semibold", courseState.tone === "done" ? "bg-emerald-500/20 text-emerald-300" : courseState.tone === "active" ? "bg-violet-500/25 text-violet-200" : "bg-white/10 text-slate-300")}>{courseState.label}</span>
+            </div>
+          </div>
+
+          {/* 无素材时的兜底 */}
+          {!materials?.length && (course.resourceUrl
+            ? <a href={course.resourceUrl} target="_blank" rel="noreferrer" className="mt-6 flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-5 py-4 text-sm font-semibold text-violet-800 transition hover:bg-violet-100"><span>打开课程资源（资源负责人尚未挂载结构化素材）</span><ExternalLink className="h-4 w-4" /></a>
+            : <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">课程资源正在复审或维护中，完成阅读说明后可先标记学习进度。</div>)}
+
+          {/* 素材内容 */}
+          {materials?.map(material => {
+            const kind = materialKindOf(material);
+            const row = progressByMaterial.get(material.id);
+            const state = progressState(row?.percent ?? 0);
+            const isActive = activeMaterial?.id === material.id;
+            const url = material.signedUrl || material.sourceUrl;
+            return <section key={material.id} className={cn("mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm", isActive ? "border-violet-300 ring-1 ring-violet-200" : "border-slate-200")}>
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{MATERIAL_KIND_LABEL[kind]}</Badge>
+                    <h2 className="truncate font-semibold">{material.title}</h2>
+                    {state.tone === "done" && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />}
+                  </div>
+                  {material.description && <p className="mt-1.5 text-sm text-slate-500">{material.description}</p>}
+                </div>
+                <div className="flex items-center gap-3">
+                  {kind !== "practice" && <span className="w-24 shrink-0 text-right text-xs text-slate-500">{state.label}</span>}
+                  {material.sourceUrl && <a href={material.sourceUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-violet-700 hover:underline">原始来源</a>}
+                </div>
+              </header>
+
+              <div className="p-5">
+                {kind === "video" && url && isActive && <VideoPlayer
+                  materialId={material.id}
+                  src={url}
+                  title={material.title}
+                  comments={comments.filter(item => item.comment.materialId === material.id)}
+                  resumeSecond={row?.position && row.percent < 100 ? row.position : null}
+                  onProgress={payload => reportProgress(material, payload)}
+                />}
+                {kind === "video" && url && !isActive && <button onClick={() => { setActiveId(material.id); beginMaterial(material.id); }} className="flex aspect-video w-full items-center justify-center gap-3 rounded-xl bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-900"><PlayCircle className="h-8 w-8 text-violet-300" />{row?.position && row.percent < 100 ? `从 ${formatClock(row.position)} 继续观看` : "播放视频"}</button>}
+                {kind === "video" && !url && <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">视频文件正在维护。</p>}
+
+                {kind === "pdf" && url && <PdfReader
+                  materialId={material.id}
+                  src={url}
+                  annotations={annotations.filter(item => item.materialId === material.id)}
+                  resumePage={row?.position && row.percent < 100 ? row.position : null}
+                  onProgress={payload => reportProgress(material, { position: payload.page, percent: clampPercent(payload.page / payload.totalPages * 100) })}
+                />}
+
+                {kind === "document" && (() => {
+                  const display = resolveDocumentDisplay({ content: material.content, mimeType: material.mimeType, url });
+                  if (display === "markdown") return <DocReader content={material.content || ""} title={material.title} onProgress={percent => reportProgress(material, { position: 0, percent })} />;
+                  if (display === "image" && url) return <img className="max-h-[620px] w-full rounded-xl border border-slate-200 object-contain" src={url} alt={material.title} />;
+                  if (display === "link" && url) return <a href={url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl bg-violet-50 px-4 py-3 text-sm font-medium text-violet-800">打开或下载文档 <ExternalLink className="h-4 w-4" /></a>;
+                  return <p className="rounded-xl bg-slate-50 p-5 text-sm text-amber-700">文档内容正在维护。</p>;
+                })()}
+
+                {kind === "practice" && <PracticePanel material={material} runs={(experience?.runs ?? []).filter(item => item.materialId === material.id)} />}
+              </div>
+            </section>;
+          })}
+
+          {/* 课程讨论区（挂在课程级，素材为空也可交流） */}
+          <div className="mt-6">{materials?.length
+            ? <DiscussionPanel materialId={activeMaterial?.id ?? materials[0].id} comments={comments} placeholder="关于这门课的任何问题、心得或补充材料" />
+            : null}</div>
+
+          {/* 上一课/下一课 */}
+          <div className="mt-6 flex items-center justify-between gap-3">
+            {prevCourse ? <Button variant="outline" onClick={() => setLocation(workbenchRoutes.course(pathId, prevCourse.id))} className="rounded-lg"><ChevronLeft className="mr-1.5 h-4 w-4" />{prevCourse.title}</Button> : <span />}
+            {nextCourse ? <Button onClick={() => setLocation(workbenchRoutes.course(pathId, nextCourse.id))} className="rounded-lg bg-violet-600 hover:bg-violet-500">{nextCourse.title}<ChevronRight className="ml-1.5 h-4 w-4" /></Button> : courseState.tone === "done" ? <span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600"><CheckCircle2 className="h-4 w-4" />本路径已全部完成 🎉</span> : null}
+          </div>
+        </div>
+
+        {/* 右栏：学习导航 */}
+        <aside className="xl:sticky xl:top-24 xl:self-start">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="flex items-center gap-1.5 text-sm font-semibold"><ListChecks className="h-4 w-4 text-violet-600" />学习进度</p>
+            <div className="mt-3 flex items-center justify-between text-xs text-slate-500"><span>课程整体完成度</span><span className="font-semibold text-violet-700">{coursePercent}%</span></div>
+            <Progress value={coursePercent} className="mt-2 h-2" />
+            <p className="mt-2 text-[11px] leading-4 text-slate-400">进度随视频观看、PDF 翻页与文档阅读自动累计，全部素材完成后自动结课。</p>
+            {saveProgress.isError && <p className="mt-2 rounded bg-rose-50 p-2 text-[11px] text-rose-600">进度保存失败：{saveProgress.error.message}</p>}
+
+            <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-4">
+              {materials?.map((material, index) => {
+                const kind = materialKindOf(material);
+                const row = progressByMaterial.get(material.id);
+                const state = progressState(row?.percent ?? 0);
+                const isActive = activeMaterial?.id === material.id;
+                return <button key={material.id} onClick={() => { setActiveId(material.id); beginMaterial(material.id); if (kind === "video" || kind === "pdf") document.querySelector(`[data-material="${material.id}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }); }} className={cn("flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left transition", isActive ? "border-violet-300 bg-violet-50/70" : "border-transparent hover:bg-slate-50")}>
+                  <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold", state.tone === "done" ? "bg-emerald-100 text-emerald-600" : isActive ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-500")}>{state.tone === "done" ? <CheckCircle2 className="h-3.5 w-3.5" /> : index + 1}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-semibold text-slate-800">{material.title}</span>
+                    <span className="block text-[10px] text-slate-400">{MATERIAL_KIND_LABEL[kind]} · {state.label}</span>
+                  </span>
+                  <span className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-slate-100"><span className={cn("block h-full", state.tone === "done" ? "bg-emerald-500" : "bg-violet-500")} style={{ width: `${row?.percent ?? 0}%` }} /></span>
+                </button>;
+              })}
+              {!materials?.length && <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">本课暂无结构化素材。</p>}
+            </div>
+
+            {materials && materials.length > 0 && (
+              <Button
+                variant={courseState.tone === "done" ? "outline" : "default"}
+                disabled={saveProgress.isPending || courseState.tone === "done"}
+                onClick={() => { const material = activeMaterial ?? materials[0]; reportProgress(material, { position: 0, percent: 100 }); toast.success("已手动标记为完成"); }}
+                className="mt-4 w-full rounded-lg"
+              >{courseState.tone === "done" ? <><CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />已完成</> : "手动标记为完成"}</Button>
+            )}
+            {annotations.length > 0 && <p className="mt-3 flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[11px] text-slate-500"><Highlighter className="h-3.5 w-3.5 text-violet-500" />已有 {annotations.length} 条 PDF 标注</p>}
+          </div>
+
+          {/* 同路径其他课程 */}
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold">路径其他内容</p>
+            <div className="mt-3 space-y-1">
+              {pathCourses.filter(item => item.id !== courseId).slice(0, 6).map(item => <button key={item.id} onClick={() => setLocation(workbenchRoutes.course(pathId, item.id))} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs text-slate-600 transition hover:bg-slate-50 hover:text-violet-700"><PlayCircle className="h-3.5 w-3.5 shrink-0 text-slate-300" /><span className="truncate">{item.title}</span></button>)}
+            </div>
+          </div>
+          {/* 内容运营入口（仅管理员）：课程信息与素材（视频/PDF/文档）都在运营台账维护 */}
+          {user?.role === "admin" && <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-5">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-violet-800"><Settings2 className="h-4 w-4" />内容运营</p>
+            <p className="mt-1.5 text-xs leading-5 text-violet-700/80">编辑课程信息、上传视频（MP4/WebM）、PDF 与文档素材，都在「内容运营台账」完成。</p>
+            <Button onClick={() => setLocation("/operations/content")} variant="outline" className="mt-3 w-full rounded-lg border-violet-300 bg-white text-violet-700 hover:bg-violet-100">去维护这门课的素材<ArrowRight className="ml-1.5 h-3.5 w-3.5" /></Button>
+          </div>}
+        </aside>
+      </div>
+    </main>
+  </PlatformShell>;
 }
-function MaterialPanel({ material, comments, runs }: { material: Material; comments: Array<{ comment: { id: number; materialId: number; content: string; videoSecond: number | null; createdAt: Date }; authorName: string | null }>; runs: Array<{ id: number; materialId: number; prompt: string; output: string; modelId: string; createdAt: Date }> }) { return <section className="rounded-2xl border border-slate-200 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Badge variant="secondary">{material.materialType === "document" ? "文档" : material.materialType === "video" ? "视频" : "实操"}</Badge><h3 className="font-semibold">{material.title}</h3></div>{material.description && <p className="mt-2 text-sm text-slate-500">{material.description}</p>}</div>{material.sourceUrl && <a href={material.sourceUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-violet-700">原始来源</a>}</div>{material.materialType === "document" && <DocumentMaterial material={material} />}{material.materialType === "video" && <VideoMaterial material={material} comments={comments.filter(item => item.comment.materialId === material.id)} />}{material.materialType === "practice" && <PracticeMaterial material={material} runs={runs.filter(item => item.materialId === material.id)} />}</section>; }
-function DocumentMaterial({ material }: { material: Material }) { const url = material.signedUrl || material.sourceUrl; const display = resolveDocumentDisplay({ content: material.content, mimeType: material.mimeType, url }); return <div className="mt-4">{display === "markdown" ? <div className="prose prose-slate max-w-none rounded-xl bg-slate-50 p-5"><Streamdown>{material.content || ""}</Streamdown></div> : display === "image" ? <img className="max-h-[620px] w-full rounded-xl border border-slate-200 object-contain" src={url || ""} alt={material.title} /> : display === "pdf" ? <iframe className="h-[520px] w-full rounded-xl border" src={url || ""} title={material.title} /> : display === "link" ? <a href={url || "#"} target="_blank" rel="noreferrer" className="mt-2 flex items-center justify-between rounded-xl bg-violet-50 px-4 py-3 text-sm font-medium text-violet-800">打开或下载文档 <ExternalLink className="h-4 w-4" /></a> : <p className="text-sm text-amber-700">文档内容正在维护。</p>}</div>; }
-function VideoMaterial({ material, comments }: { material: Material; comments: Array<{ comment: { id: number; content: string; videoSecond: number | null; createdAt: Date }; authorName: string | null }> }) { const video = useRef<HTMLVideoElement>(null); const [speed, setSpeed] = useState("1"); const [second, setSecond] = useState<number | null>(null); const [comment, setComment] = useState(""); const utils = trpc.useUtils(); const add = trpc.platform.learning.addComment.useMutation({ onSuccess: () => { setComment(""); utils.platform.learning.courseExperience.invalidate(); } }); const url = material.signedUrl || material.sourceUrl; return <div className="mt-4"><div className="relative overflow-hidden rounded-xl bg-slate-950">{url ? <video ref={video} controls className="aspect-video w-full" src={url} onTimeUpdate={() => setSecond(Math.floor(video.current?.currentTime ?? 0))} /> : <div className="grid aspect-video place-items-center text-sm text-slate-300">视频文件正在维护</div>}<div className="absolute right-3 top-3 rounded-lg bg-black/60 px-2 py-1 text-xs text-white">{comments.filter(item => item.comment.videoSecond !== null && Math.abs((item.comment.videoSecond ?? 0) - (second ?? 0)) < 4).slice(0, 2).map(item => <p key={item.comment.id}>「{item.comment.content}」</p>)}</div></div><div className="mt-3 flex items-center gap-3 text-sm"><label>倍速 <select value={speed} onChange={event => { setSpeed(event.target.value); if (video.current) video.current.playbackRate = Number(event.target.value); }} className="ml-1 rounded border px-2 py-1">{VIDEO_PLAYBACK_SPEEDS.map(option => <option key={option} value={option}>{option}×</option>)}</select></label><span className="text-slate-400">当前时间 {second ?? 0}s</span></div><div className="mt-4 flex gap-2"><Textarea value={comment} onChange={event => setComment(event.target.value)} placeholder="写下时间戳评论，可作为轻量弹幕显示" className="min-h-10" /><Button disabled={!comment.trim() || add.isPending} onClick={() => add.mutate({ materialId: material.id, content: comment.trim(), videoSecond: second })}><Send className="h-4 w-4" /></Button></div><div className="mt-4 space-y-2">{comments.slice(-5).reverse().map(item => <div key={item.comment.id} className="flex gap-2 text-sm"><MessageCircle className="mt-0.5 h-4 w-4 text-violet-600" /><p><span className="font-medium">{item.authorName || "员工"}</span>{item.comment.videoSecond !== null && <span className="mx-1 text-violet-700">@ {item.comment.videoSecond}s</span>}{item.comment.content}</p></div>)}</div></div>; }
-function PracticeMaterial({ material, runs }: { material: Material; runs: Array<{ id: number; prompt: string; output: string; modelId: string; createdAt: Date }> }) { const [prompt, setPrompt] = useState(""); const [output, setOutput] = useState(""); const run = trpc.platform.learning.runPractice.useMutation({ onSuccess: result => setOutput(result.output) }); return <div className="mt-4 rounded-xl bg-slate-950 p-5 text-white"><div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300" /><p className="text-sm font-semibold">受控模型实操台</p></div><p className="mt-2 text-xs leading-5 text-slate-300">仅运行课程定义的 AI 任务，不执行代码、浏览器或外部系统操作；每天最多 5 次，结果仅归属当前学习者。</p><Textarea value={prompt} onChange={event => setPrompt(event.target.value)} className="mt-4 border-white/20 bg-white/10 text-white placeholder:text-slate-400" placeholder="输入你的业务素材或任务描述" /><Button disabled={prompt.trim().length < 2 || run.isPending} onClick={() => run.mutate({ materialId: material.id, prompt: prompt.trim() })} className="mt-3 bg-violet-500 hover:bg-violet-400">{run.isPending ? "正在运行" : "运行并获取结果"}</Button>{output && <div className="prose prose-invert mt-5 max-w-none rounded-xl bg-white/10 p-4"><Streamdown>{output}</Streamdown></div>}{runs.length > 0 && <div className="mt-5 border-t border-white/10 pt-4"><p className="text-xs font-semibold text-slate-300">我的最近运行</p>{runs.slice(0, 3).map(item => <p key={item.id} className="mt-2 line-clamp-2 text-xs text-slate-400">{item.modelId} · {item.prompt}</p>)}</div>}</div>; }
+
+// 受控模型实操台（沿用原有能力，样式对齐新页面）。
+function PracticePanel({ material, runs }: { material: Material; runs: Array<{ id: number; prompt: string; output: string; modelId: string; createdAt: Date }> }) {
+  const [prompt, setPrompt] = useState("");
+  const [output, setOutput] = useState("");
+  const run = trpc.platform.learning.runPractice.useMutation({ onSuccess: result => setOutput(result.output), onError: error => toast.error(error.message) });
+  return <div className="rounded-xl bg-slate-950 p-5 text-white">
+    <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-violet-300" /><p className="text-sm font-semibold">受控模型实操台</p></div>
+    <p className="mt-2 text-xs leading-5 text-slate-300">仅运行课程定义的 AI 任务，不执行代码、浏览器或外部系统操作；每天最多 5 次，结果仅归属当前学习者。</p>
+    <Textarea value={prompt} onChange={event => setPrompt(event.target.value)} className="mt-4 border-white/20 bg-white/10 text-white placeholder:text-slate-400" placeholder="输入你的业务素材或任务描述" />
+    <Button disabled={prompt.trim().length < 2 || run.isPending} onClick={() => run.mutate({ materialId: material.id, prompt: prompt.trim() })} className="mt-3 bg-violet-500 hover:bg-violet-400">{run.isPending ? "正在运行" : "运行并获取结果"}</Button>
+    {output && <div className="prose prose-invert mt-5 max-w-none rounded-xl bg-white/10 p-4"><Streamdown>{output}</Streamdown></div>}
+    {runs.length > 0 && <div className="mt-5 border-t border-white/10 pt-4"><p className="text-xs font-semibold text-slate-300">我的最近运行</p>{runs.slice(0, 3).map(item => <p key={item.id} className="mt-2 line-clamp-2 text-xs text-slate-400">{item.modelId} · {item.prompt}</p>)}</div>}
+  </div>;
+}

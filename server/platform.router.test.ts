@@ -286,12 +286,15 @@ describe("Skills 广场路由", () => {
   it("returns only approved catalog entries with keyword/category-compatible rating summaries and protected detail feedback", async () => {
     const approved = { id: 21, skillKey: "patent-research", name: "专利检索助手", summary: skillPayload.summary, description: skillPayload.description, category: "专业助手", tags: ["专利"], version: "v1.0", skillMd: skillPayload.skillMd, usageGuide: skillPayload.usageGuide, packageStorageKey: "skills/7/patent.zip", packageFileName: "patent.zip", packageSizeBytes: 4, authorId: 7, reviewStatus: "approved", createdAt: new Date(), updatedAt: new Date(), publishedAt: new Date() };
     const review = { id: 51, skillId: 21, userId: 7, rating: 5, comment: "已用于专利初筛，边界说明清晰。", createdAt: new Date(), updatedAt: new Date() };
-    const results = [[{ skill: approved, authorName: "Mock User" }], [{ skillId: 21, averageRating: 5, reviewCount: 1 }], [{ skill: approved, authorName: "Mock User" }], [{ averageRating: 5, reviewCount: 1 }], [{ review, reviewerName: "Mock User" }], [review]];
-    const query = (rows: unknown[]) => ({ from: () => query(rows), leftJoin: () => query(rows), innerJoin: () => query(rows), where: () => query(rows), groupBy: async () => rows, orderBy: async () => rows, limit: async () => rows });
+    const results = [[{ skill: approved, authorName: "Mock User" }], [{ skillId: 21, averageRating: 5, reviewCount: 1 }], [{ skill: approved, authorName: "Mock User" }], [{ averageRating: 5, reviewCount: 1 }], [{ review, reviewerName: "Mock User" }], [review], [{ totalDownloads: 3 }], []];
+    const query = (rows: unknown[]) => {
+      const chain: Record<string, unknown> = { from: () => chain, leftJoin: () => chain, innerJoin: () => chain, where: () => chain, groupBy: () => chain, orderBy: () => chain, limit: async () => rows, then: (resolve: (value: unknown) => void) => resolve(rows) };
+      return chain;
+    };
     mocks.getDb.mockResolvedValue({ select: vi.fn(() => query(results.shift() ?? [])) });
     const employee = platformRouter.createCaller(ctx("user"));
     await expect(employee.skills.list({ keyword: "专利", category: "专业助手", sort: "rating" })).resolves.toEqual([expect.objectContaining({ skill: expect.objectContaining({ reviewStatus: "approved" }), averageRating: 5 })]);
-    await expect(employee.skills.detail({ id: 21 })).resolves.toMatchObject({ reviews: [expect.objectContaining({ review: expect.objectContaining({ rating: 5 }) })], myReview: expect.objectContaining({ userId: 7 }) });
+    await expect(employee.skills.detail({ id: 21 })).resolves.toMatchObject({ reviews: [expect.objectContaining({ review: expect.objectContaining({ rating: 5 }) })], myReview: expect.objectContaining({ userId: 7 }), totalDownloads: 3, related: [] });
   });
 
   it("records a single employee download history and only signs the package after access validation", async () => {

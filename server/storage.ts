@@ -54,6 +54,15 @@ export async function storagePut(
   return { key, url: `/api/files/${key}` };
 }
 
+// 流式上传场景：先取带随机后缀的落盘 key，由调用方自行 pipe 写入后补写 meta。
+export async function storageKeyFor(relKey: string): Promise<string> {
+  return appendHashSuffix(normalizeKey(relKey));
+}
+
+export async function writeStorageMeta(key: string, contentType: string): Promise<void> {
+  await writeFile(`${resolveStoragePath(key)}.meta.json`, JSON.stringify({ contentType }), "utf8");
+}
+
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
   return { key, url: `/api/files/${key}` };

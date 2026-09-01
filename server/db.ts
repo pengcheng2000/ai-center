@@ -11,6 +11,7 @@ import {
   communityPosts,
   communityTopicFollows,
   communityTopics,
+  courseMaterialProgress,
   courseMaterials,
   courseProgress,
   courses,
@@ -41,6 +42,19 @@ type RecommendationPath = { id: number; title: string; tags: string[]; isFeature
 type RecommendationCourse = { id: number; pathId: number };
 type RecommendationProgress = { courseId: number; progress: number };
 type RecommendationProfile = { abilityTags: string[]; interestTags: string[] } | null;
+
+// 以本地日期计算连续学习天数：今天没有记录时从昨天起算，避免“当晚 23:59 学习、次日 00:01 断签”。
+export function computeLearningStats(rows: Array<{ minutes: number; updatedAt: Date }>, now = new Date()) {
+  const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const weekAgo = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const weeklyMinutes = rows.filter(row => row.updatedAt.getTime() >= weekAgo).reduce((sum, row) => sum + row.minutes, 0);
+  const activeDays = new Set(rows.map(row => dayKey(row.updatedAt)));
+  const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (!activeDays.has(dayKey(cursor))) cursor.setDate(cursor.getDate() - 1);
+  let streak = 0;
+  while (activeDays.has(dayKey(cursor))) { streak += 1; cursor.setDate(cursor.getDate() - 1); }
+  return { weeklyMinutes, streak, activeDays: activeDays.size };
+}
 
 export function buildLearningRecommendations(paths: RecommendationPath[], courseRows: RecommendationCourse[], progressRows: RecommendationProgress[], profile: RecommendationProfile) {
   const preferenceTags = new Set([...(profile?.abilityTags ?? []), ...(profile?.interestTags ?? [])].map(tag => tag.toLowerCase()));
@@ -210,9 +224,9 @@ export async function getPublicCatalog(category?: string, fullTextOnly = false) 
 
 export async function getPersonalSpaceByUserId(userId: number) {
   const db = await getDb();
-  if (!db) return { profile: null, progress: [], favorites: [], likedPosts: [], workspace: [], recommendations: [] };
+  if (!db) return { profile: null, progress: [], favorites: [], likedPosts: [], workspace: [], recommendations: [], learningStats: { weeklyMinutes: 0, streak: 0, activeDays: 0 } };
   await db.insert(userProfiles).values({ userId, abilityTags: ["AI 学习者"], interestTags: ["办公提效"], growthGoals: ["建立一个可复用的 AI 工作流"] }).onDuplicateKeyUpdate({ set: { userId } });
-  const [profile, progress, favorites, likedPosts, workspace, availablePaths, courseRows] = await Promise.all([
+  const [profile, progress, favorites, likedPosts, workspace, availablePaths, courseRows, activityRows] = await Promise.all([
     db.select().from(userProfiles).where(eq(userProfiles.userId, userId)).limit(1),
     db.select().from(courseProgress).where(eq(courseProgress.userId, userId)),
     db.select().from(newsFavorites).where(eq(newsFavorites.userId, userId)),
@@ -220,10 +234,11 @@ export async function getPersonalSpaceByUserId(userId: number) {
     db.select().from(workspaceItems).where(eq(workspaceItems.userId, userId)).orderBy(asc(workspaceItems.orderIndex)),
     db.select().from(learningPaths).where(eq(learningPaths.isPublished, 1)),
     db.select({ id: courses.id, pathId: courses.pathId, lifecycleStatus: courses.lifecycleStatus }).from(courses).where(eq(courses.lifecycleStatus, "published")),
+    db.select({ minutes: courseMaterialProgress.minutes, updatedAt: courseMaterialProgress.updatedAt }).from(courseMaterialProgress).where(eq(courseMaterialProgress.userId, userId)),
   ]);
   const profileRow = profile[0] ?? null;
   const recommendations = buildLearningRecommendations(availablePaths, courseRows, progress, profileRow ? { abilityTags: profileRow.abilityTags, interestTags: profileRow.interestTags } : null);
-  return { profile: profileRow, progress, favorites, likedPosts, workspace, recommendations };
+  return { profile: profileRow, progress, favorites, likedPosts, workspace, recommendations, learningStats: computeLearningStats(activityRows) };
 }
 
 export async function getPersonalSpace(user: User) {

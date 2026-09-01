@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, inArray, isNull, like, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, like, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { agentImportJobs, agentImportKeys, auditAgents, auditRecords, auditRules, communityPosts, communityTopicFollows, communityTopics, courseMaterialComments, courseMaterials, coursePracticeRuns, courseProgress, courses, enterpriseApps, featureModules, learningPaths, llmModels, llmProviders, modelRoutingPolicies, newsFavorites, newsItems, newsReadEvents, newsSources, postAttachments, postComments, postFavorites, postLikes, skillDownloads, skillPackages, skillReviews, userProfiles, users, workspaceItems } from "../../drizzle/schema";
+import { agentImportJobs, agentImportKeys, assistantChats, auditAgents, auditRecords, auditRules, communityPosts, communityTopicFollows, communityTopics, courseMaterialAnnotations, courseMaterialComments, courseMaterialProgress, courseMaterials, coursePracticeRuns, courseProgress, courses, enterpriseApps, featureModules, learningPaths, llmModels, llmProviders, modelRoutingPolicies, newsFavorites, newsItems, newsReadEvents, newsSources, postAttachments, postComments, postFavorites, postLikes, skillDownloads, skillPackages, skillReviews, userProfiles, users, workspaceItems } from "../../drizzle/schema";
 import { discardDraftAttachmentForUser, deleteWorkspaceForUser, getDb, getOperationsData, getPersonalSpaceByUserId, getPublicCatalog, tables } from "../db";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { ENV } from "../_core/env";
@@ -69,6 +69,62 @@ export function validateImageDataUrl(dataUrl: string, mimeType: string) {
   const buffer = Buffer.from(match[3], "base64");
   if (buffer.length > 5 * 1024 * 1024) throw new TRPCError({ code: "BAD_REQUEST", message: "单张图片不能超过 5MB" });
   return buffer;
+}
+
+export const ANNOTATION_COLORS = ["amber", "violet", "rose", "emerald", "sky"] as const;
+export const annotationColorInput = z.enum(ANNOTATION_COLORS);
+
+// 平台 AI 助手的页面类型中文标签，注入系统提示词让模型理解用户所处位置。
+export const ASSISTANT_PAGE_KIND_LABEL: Record<string, string> = {
+  home: "工作台首页", learn: "学习中心", learningPath: "学习路径详情", course: "课程学习页",
+  newsList: "AI 资讯列表", newsArticle: "资讯文章阅读页", communityList: "实践社区列表", postDetail: "社区帖子详情",
+  skillsHub: "Skills 广场", skillDetail: "Skills 详情", profile: "个人空间", operations: "运营管理", apps: "应用中心", other: "其他页面",
+};
+
+// 助手系统提示词：平台使用指导 + 页面上下文阅读协助，行为边界对齐企业规范。
+export const ASSISTANT_SYSTEM_PROMPT = [
+  "你是「全员 AI 能力提升平台」的内置 AI 助手小智，帮助员工用好平台、读懂内容、解答 AI 相关问题。",
+  "",
+  "## 平台功能速查（指导使用时以此为准，不确定的功能就说不知道）",
+  "- 工作台（/）：个人能力画像、学习推荐、常用入口。",
+  "- 学习中心（/learn）：按路径学习。视频支持弹幕/倍速/时间戳评论/断点续播；PDF 支持拖选标注（仅自己可见）与翻页进度；文档按滚动位置记进度；课程内可评论交流。观看与阅读进度自动累计，全部素材完成后自动结课。",
+  "- 学习路径详情（/learn/:id）：路径任务清单、整体进度、逐节直达。",
+  "- 课程学习页（/learn/:pathId/course/:courseId）：左侧学习内容 + 右侧学习导航（素材进度清单）。右下角悬浮球可打开本助手。",
+  "- AI 资讯（/news）：已审核的 AI 动态，文章页支持阅读记录与收藏。",
+  "- 实践社区（/community）：发帖、点赞、评论、话题关注。",
+  "- 应用中心（/apps）：企业 AI 应用入口。",
+  "- Skills 广场（/skills）：员工沉淀的可复用 AI 技能包，支持提交、评分、下载安装。",
+  "- 个人空间（/me）：能力画像与学习统计（连续天数、本周分钟数）。",
+  "",
+  "## 当前页面上下文",
+  "{{PAGE_CONTEXT}}",
+  "",
+  "## 回答要求",
+  "1. 若用户问「这个页面/这篇文章讲了什么」，优先基于页面上下文正文摘录作答；摘录不足时如实说明并建议用户补充。",
+  "2. 若用户问「怎么用/在哪里」，基于平台功能速查给出具体路径与操作步骤，必要时提示页面入口。",
+  "3. 若用户选中的文字在上下文中，回答时优先围绕选中内容（解释、翻译、改写、提炼）。",
+  "4. 涉及平台没有的功能，直说当前版本不支持，不要编造。",
+  "5. 不处理敏感个人信息与未公开经营数据；建议不构成业务审批结论。",
+  "6. 用简体中文，结构清晰，先结论后展开，篇幅与问题复杂度匹配。",
+].join("\n");
+const annotationRectInput = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0.001).max(1), h: z.number().min(0.001).max(1) });
+export const annotationInput = z.object({ materialId: z.number().int().positive(), page: z.number().int().min(1).max(5_000), rects: z.array(annotationRectInput).min(1).max(8), note: z.string().trim().min(1).max(2_000), color: annotationColorInput.default("amber") }).strict();
+export function ownedAnnotationValues(userId: number, input: z.infer<typeof annotationInput>) { return { materialId: input.materialId, userId, page: input.page, rects: input.rects, note: input.note, color: input.color }; }
+
+// 视频判定兼容“上传了视频文件但类型仍选了文档”的历史数据：mime 为 video/* 一律按视频处理。
+export function isVideoMaterial(material: { materialType: "document" | "video" | "practice"; mimeType: string | null }) { return material.materialType === "video" || (material.mimeType ?? "").startsWith("video/"); }
+
+// 视频记录秒数、PDF 记录当前页、文档记录滚动百分比；durationSeconds 仅在能确定分母时使用。
+export function materialPositionFromKind(kind: "video" | "pdf" | "document", position: number, durationSeconds?: number | null) {
+  if (kind === "video") return { position: Math.max(0, Math.round(position)), percent: durationSeconds ? Math.min(100, Math.round(position / durationSeconds * 100)) : 0 };
+  if (kind === "pdf") return { position: Math.max(1, Math.round(position)), percent: durationSeconds ? Math.min(100, Math.round(position / durationSeconds * 100)) : 0 };
+  return { position: 0, percent: Math.max(0, Math.min(100, Math.round(position))) };
+}
+
+// 学习分钟数按“有素材记录以来的自然天数”粗略分摊，避免把历史累计一次性记到今天。
+export function deriveMaterialMinutes(kind: "video" | "pdf" | "document", position: number, percent: number, secondsWatched: number, elapsedMs: number) {
+  if (kind === "video") return Math.max(0, Math.round(secondsWatched / 60));
+  return Math.max(0, Math.min(180, Math.round(elapsedMs / 60_000)));
 }
 
 const sourceInput = z.object({ name: z.string().min(2).max(140), url: z.string().url().max(500), sourceType: z.enum(["rss", "website", "api", "manual"]), category: z.string().min(2).max(80), description: z.string().max(1000).optional(), isEnabled: z.boolean(), reviewStatus: z.enum(["current", "due", "overdue"]).default("current") });
@@ -145,12 +201,14 @@ export const platformRouter = router({
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
       const [row] = await db.select({ skill: skillPackages, authorName: users.name }).from(skillPackages).leftJoin(users, eq(skillPackages.authorId, users.id)).where(eq(skillPackages.id, input.id)).limit(1);
       if (!row || (row.skill.reviewStatus !== "approved" && row.skill.authorId !== ctx.user.id && ctx.user.role !== "admin")) throw new TRPCError({ code: "NOT_FOUND", message: "该 Skills 暂不可查看" });
-      const [ratingSummary, reviews, myReview] = await Promise.all([
+      const [ratingSummary, reviews, myReview, downloadSummary, related] = await Promise.all([
         db.select({ averageRating: sql<number>`coalesce(avg(${skillReviews.rating}), 0)`, reviewCount: sql<number>`count(${skillReviews.id})` }).from(skillReviews).where(eq(skillReviews.skillId, input.id)),
         db.select({ review: skillReviews, reviewerName: users.name }).from(skillReviews).leftJoin(users, eq(skillReviews.userId, users.id)).where(eq(skillReviews.skillId, input.id)).orderBy(desc(skillReviews.updatedAt)),
         db.select().from(skillReviews).where(and(eq(skillReviews.skillId, input.id), eq(skillReviews.userId, ctx.user.id))).limit(1),
+        db.select({ totalDownloads: sql<number>`coalesce(sum(${skillDownloads.downloadCount}), 0)` }).from(skillDownloads).where(eq(skillDownloads.skillId, input.id)),
+        db.select({ id: skillPackages.id, name: skillPackages.name, summary: skillPackages.summary, skillKey: skillPackages.skillKey, category: skillPackages.category, version: skillPackages.version }).from(skillPackages).where(and(eq(skillPackages.reviewStatus, "approved"), eq(skillPackages.category, row.skill.category), ne(skillPackages.id, input.id))).orderBy(desc(skillPackages.publishedAt)).limit(3),
       ]);
-      return { ...row, averageRating: Number(ratingSummary[0]?.averageRating ?? 0), reviewCount: Number(ratingSummary[0]?.reviewCount ?? 0), reviews, myReview: myReview[0] ?? null };
+      return { ...row, averageRating: Number(ratingSummary[0]?.averageRating ?? 0), reviewCount: Number(ratingSummary[0]?.reviewCount ?? 0), totalDownloads: Number(downloadSummary[0]?.totalDownloads ?? 0), related, reviews, myReview: myReview[0] ?? null };
     }),
     requestDownload: protectedProcedure.input(z.object({ skillId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
@@ -251,19 +309,68 @@ export const platformRouter = router({
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
       const [course] = await db.select().from(courses).where(and(eq(courses.id, input.courseId), eq(courses.lifecycleStatus, "published"))).limit(1);
       if (!course) throw new TRPCError({ code: "NOT_FOUND", message: "该课程暂不可学习" });
-      const [materials, comments, runs] = await Promise.all([
+      const [materials, comments, runs, materialProgress, annotations] = await Promise.all([
         db.select().from(courseMaterials).where(eq(courseMaterials.courseId, input.courseId)).orderBy(courseMaterials.orderIndex),
         db.select({ comment: courseMaterialComments, authorName: users.name }).from(courseMaterialComments).leftJoin(users, eq(courseMaterialComments.userId, users.id)).leftJoin(courseMaterials, eq(courseMaterialComments.materialId, courseMaterials.id)).where(eq(courseMaterials.courseId, input.courseId)).orderBy(courseMaterialComments.createdAt),
         db.select().from(coursePracticeRuns).where(eq(coursePracticeRuns.userId, ctx.user.id)).orderBy(desc(coursePracticeRuns.createdAt)).limit(12),
+        db.select().from(courseMaterialProgress).where(eq(courseMaterialProgress.userId, ctx.user.id)),
+        db.select().from(courseMaterialAnnotations).where(eq(courseMaterialAnnotations.userId, ctx.user.id)),
       ]);
-      return { materials: await Promise.all(materials.map(async item => ({ ...item, signedUrl: item.storageKey ? await storageGetSignedUrl(item.storageKey) : null }))), comments, runs: runs.filter(run => materials.some(material => material.id === run.materialId)) };
+      const materialIds = new Set(materials.map(material => material.id));
+      return {
+        materials: await Promise.all(materials.map(async item => ({ ...item, signedUrl: item.storageKey ? await storageGetSignedUrl(item.storageKey) : null }))),
+        comments,
+        runs: runs.filter(run => materialIds.has(run.materialId)),
+        materialProgress: materialProgress.filter(item => materialIds.has(item.materialId)),
+        annotations: annotations.filter(item => materialIds.has(item.materialId)),
+        courseProgressRow: (await db.select().from(courseProgress).where(and(eq(courseProgress.userId, ctx.user.id), eq(courseProgress.courseId, input.courseId))).limit(1))[0] ?? null,
+      };
     }),
-    addComment: protectedProcedure.input(z.object({ materialId: z.number().int().positive(), content: z.string().min(1).max(500), videoSecond: z.number().int().min(0).max(21_600).nullable().default(null) })).mutation(async ({ ctx, input }) => {
+    addComment: protectedProcedure.input(z.object({ materialId: z.number().int().positive(), content: z.string().min(1).max(500), videoSecond: z.number().int().min(0).max(21_600).nullable().default(null), isDanmaku: z.boolean().default(false) })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
       const [material] = await db.select({ material: courseMaterials, lifecycleStatus: courses.lifecycleStatus }).from(courseMaterials).leftJoin(courses, eq(courseMaterials.courseId, courses.id)).where(eq(courseMaterials.id, input.materialId)).limit(1);
       if (!material || material.lifecycleStatus !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "该学习资源暂不可互动" });
-      if (input.videoSecond !== null && material.material.materialType !== "video") throw new TRPCError({ code: "BAD_REQUEST", message: "仅视频支持时间戳评论" });
-      await db.insert(courseMaterialComments).values({ materialId: input.materialId, userId: ctx.user.id, content: input.content, videoSecond: input.videoSecond }); return { success: true };
+      if (input.videoSecond !== null && !isVideoMaterial(material.material)) throw new TRPCError({ code: "BAD_REQUEST", message: "仅视频支持时间戳评论" });
+      await db.insert(courseMaterialComments).values({ materialId: input.materialId, userId: ctx.user.id, content: input.content, videoSecond: input.videoSecond, isDanmaku: input.isDanmaku ? 1 : 0 }); return { success: true };
+    }),
+    deleteComment: protectedProcedure.input(z.object({ commentId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      await db.delete(courseMaterialComments).where(and(eq(courseMaterialComments.id, input.commentId), eq(courseMaterialComments.userId, ctx.user.id))); return { success: true };
+    }),
+    saveMaterialProgress: protectedProcedure.input(z.object({ materialId: z.number().int().positive(), position: z.number().min(0), percent: z.number().int().min(0).max(100), minutesDelta: z.number().int().min(0).max(120).default(0) })).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      const [material] = await db.select({ material: courseMaterials, lifecycleStatus: courses.lifecycleStatus }).from(courseMaterials).leftJoin(courses, eq(courseMaterials.courseId, courses.id)).where(eq(courseMaterials.id, input.materialId)).limit(1);
+      if (!material || material.lifecycleStatus !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "该学习资源暂不可记录" });
+      const kind = isVideoMaterial(material.material) ? "video" : material.material.mimeType === "application/pdf" ? "pdf" : "document";
+      const derived = materialPositionFromKind(kind, input.position, null);
+      const percent = kind === "document" ? input.percent : derived.percent || input.percent;
+      const [existing] = await db.select().from(courseMaterialProgress).where(and(eq(courseMaterialProgress.userId, ctx.user.id), eq(courseMaterialProgress.materialId, input.materialId))).limit(1);
+      const nextMinutes = Math.min(600, (existing?.minutes ?? 0) + input.minutesDelta);
+      await db.insert(courseMaterialProgress).values({ userId: ctx.user.id, materialId: input.materialId, position: derived.position, percent, minutes: nextMinutes, createdAt: new Date(), updatedAt: new Date() }).onDuplicateKeyUpdate({ set: { position: derived.position, percent, minutes: nextMinutes, updatedAt: new Date() } });
+      // 课程总进度 = 各素材平均完成度；全部素材到 100% 时自动写入完成时间。
+      const siblings = await db.select({ id: courseMaterials.id }).from(courseMaterials).where(eq(courseMaterials.courseId, material.material.courseId));
+      const rows = await db.select({ materialId: courseMaterialProgress.materialId, percent: courseMaterialProgress.percent }).from(courseMaterialProgress).where(eq(courseMaterialProgress.userId, ctx.user.id));
+      const percentByMaterial = new Map(rows.map(row => [row.materialId, row.percent]));
+      const total = siblings.length ? Math.round(siblings.reduce((sum, sibling) => sum + (percentByMaterial.get(sibling.id) ?? 0), 0) / siblings.length) : percent;
+      const finalized = Math.min(100, total);
+      await db.insert(courseProgress).values({ userId: ctx.user.id, courseId: material.material.courseId, progress: finalized, lastMaterialId: input.materialId, completedAt: finalized === 100 ? new Date() : null }).onDuplicateKeyUpdate({ set: { progress: finalized, lastMaterialId: input.materialId, ...(finalized === 100 ? { completedAt: new Date() } : {}) } });
+      return { success: true, materialPercent: percent, coursePercent: finalized };
+    }),
+    addAnnotation: protectedProcedure.input(annotationInput).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      const [material] = await db.select({ material: courseMaterials, lifecycleStatus: courses.lifecycleStatus }).from(courseMaterials).leftJoin(courses, eq(courseMaterials.courseId, courses.id)).where(eq(courseMaterials.id, input.materialId)).limit(1);
+      if (!material || material.lifecycleStatus !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "该学习资源暂不可标注" });
+      const [created] = await db.insert(courseMaterialAnnotations).values(ownedAnnotationValues(ctx.user.id, input)).$returningId();
+      return { id: created.id, success: true };
+    }),
+    updateAnnotation: protectedProcedure.input(annotationInput.extend({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      const { id, ...values } = input;
+      await db.update(courseMaterialAnnotations).set(values).where(and(eq(courseMaterialAnnotations.id, id), eq(courseMaterialAnnotations.userId, ctx.user.id))); return { success: true };
+    }),
+    deleteAnnotation: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      await db.delete(courseMaterialAnnotations).where(and(eq(courseMaterialAnnotations.id, input.id), eq(courseMaterialAnnotations.userId, ctx.user.id))); return { success: true };
     }),
     runPractice: protectedProcedure.input(z.object({ materialId: z.number().int().positive(), prompt: z.string().min(2).max(3_000) })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
@@ -275,6 +382,51 @@ export const platformRouter = router({
       const response = await invokeLLM({ messages: [{ role: "system", content: `你是企业 AI 学习实操助手。${instruction} 不处理敏感个人信息，不执行外部操作，不把建议视为业务审批。` }, { role: "user", content: input.prompt }] });
       const output = response.choices[0]?.message?.content; if (typeof output !== "string") throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "模型未返回可阅读结果" });
       await db.insert(coursePracticeRuns).values({ materialId: input.materialId, userId: ctx.user.id, modelId: response.model, prompt: input.prompt, output: output.slice(0, 16_000) }); return { output: output.slice(0, 16_000), modelId: response.model };
+    }),
+  }),
+  // 平台 AI 助手：知晓平台功能与当前浏览页面，可指导使用、协助阅读、解答问题。
+  assistant: router({
+    chat: protectedProcedure.input(z.object({
+      question: z.string().trim().min(1).max(2_000),
+      // 当前页面上下文由前端采集：路由、页面类型、标题与正文摘录。
+      pageContext: z.object({
+        route: z.string().min(1).max(200),
+        pageKind: z.enum(["home", "learn", "learningPath", "course", "newsList", "newsArticle", "communityList", "postDetail", "skillsHub", "skillDetail", "profile", "operations", "apps", "other"]),
+        title: z.string().max(300).default(""),
+        excerpt: z.string().max(12_000).default(""),
+        selection: z.string().max(4_000).default(""),
+      }).nullable().default(null),
+      // 多轮对话历史（不含本次提问），最多保留最近 16 条。
+      history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(4_000) })).max(16).default([]),
+    })).mutation(async ({ ctx, input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      // 每人每天 60 次问答，防止刷接口占用受管网关额度。
+      const [usage] = await db.select({ count: sql<number>`count(*)` }).from(assistantChats).where(and(eq(assistantChats.userId, ctx.user.id), sql`date(${assistantChats.createdAt}) = curdate()`));
+      if (Number(usage?.count ?? 0) >= 60) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "AI 助手每天最多 60 次问答，请明天再试" });
+
+      const contextBlock = input.pageContext ? [
+        "<page_context>",
+        `当前用户正在浏览的页面：${input.pageContext.route}（${ASSISTANT_PAGE_KIND_LABEL[input.pageContext.pageKind] ?? input.pageContext.pageKind}）`,
+        input.pageContext.title ? `页面标题：${input.pageContext.title}` : "",
+        input.pageContext.selection ? `用户在页面上选中的文字：\n${input.pageContext.selection}` : "",
+        input.pageContext.excerpt ? `页面正文摘录：\n${input.pageContext.excerpt.slice(0, 12_000)}` : "",
+        "</page_context>",
+      ].filter(Boolean).join("\n") : "";
+
+      const messages = [
+        { role: "system" as const, content: ASSISTANT_SYSTEM_PROMPT.replace("{{PAGE_CONTEXT}}", contextBlock || "（用户未提供当前页面信息）") },
+        ...input.history.slice(-16).map(item => ({ role: item.role, content: item.content })),
+        { role: "user" as const, content: input.question },
+      ];
+      const response = await invokeLLM({ maxTokens: 2_000, messages });
+      const answer = response.choices[0]?.message?.content;
+      if (typeof answer !== "string" || !answer.trim()) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI 助手未返回可阅读的答复" });
+      await db.insert(assistantChats).values({ userId: ctx.user.id, question: input.question, answer: answer.slice(0, 16_000), pageRoute: input.pageContext?.route.slice(0, 200) ?? null, pageKind: input.pageContext?.pageKind ?? null });
+      return { answer: answer.slice(0, 16_000), modelId: response.model };
+    }),
+    history: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb(); if (!db) return [];
+      return db.select().from(assistantChats).where(eq(assistantChats.userId, ctx.user.id)).orderBy(desc(assistantChats.createdAt)).limit(50);
     }),
   }),
   community: router({
@@ -509,6 +661,11 @@ export const platformRouter = router({
     updateCourseMaterial: adminProcedure.input(materialInput.safeExtend({ id: z.number().int().positive() })).mutation(async ({ input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
       const { id, ...values } = input; await db.update(courseMaterials).set({ ...values, description: values.description ?? null, sourceUrl: values.sourceUrl ?? null, storageKey: values.storageKey ?? null, mimeType: values.mimeType ?? null, content: values.content ?? null }).where(eq(courseMaterials.id, id)); return { success: true };
+    }),
+    deleteCourseMaterial: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ input }) => {
+      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      // 级联清理：评论、标注、素材进度、实操记录随 FK onDelete:"cascade" 一并删除。
+      await db.delete(courseMaterials).where(eq(courseMaterials.id, input.id)); return { success: true };
     }),
     addTopic: adminProcedure.input(topicInput).mutation(async ({ input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });

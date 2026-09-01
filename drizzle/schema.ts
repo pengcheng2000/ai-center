@@ -74,9 +74,35 @@ export const courseProgress = mysqlTable("courseProgress", {
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   courseId: int("courseId").notNull().references(() => courses.id, { onDelete: "cascade" }),
   progress: int("progress").notNull().default(0),
+  lastMaterialId: int("lastMaterialId").references(() => courseMaterials.id, { onDelete: "set null" }),
   completedAt: timestamp("completedAt"),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => [uniqueIndex("course_progress_user_course_unique").on(table.userId, table.courseId)]);
+
+// 每个学习素材的阅读进度：视频记录秒数、PDF 记录页码、文档记录滚动百分比。
+export const courseMaterialProgress = mysqlTable("courseMaterialProgress", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  materialId: int("materialId").notNull().references(() => courseMaterials.id, { onDelete: "cascade" }),
+  position: int("position").notNull().default(0),
+  percent: int("percent").notNull().default(0),
+  minutes: int("minutes").notNull().default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [uniqueIndex("course_material_progress_user_material_unique").on(table.userId, table.materialId)]);
+
+// PDF 阅读标注：矩形区域以页面宽高的 0-1 归一化坐标存储，跨设备可还原。
+export const courseMaterialAnnotations = mysqlTable("courseMaterialAnnotations", {
+  id: int("id").autoincrement().primaryKey(),
+  materialId: int("materialId").notNull().references(() => courseMaterials.id, { onDelete: "cascade" }),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  page: int("page").notNull().default(1),
+  rects: json("rects").$type<Array<{ x: number; y: number; w: number; h: number }>>().notNull(),
+  note: text("note").notNull(),
+  color: varchar("color", { length: 16 }).notNull().default("amber"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [index("course_material_annotations_material_idx").on(table.materialId, table.userId, table.page)]);
 
 export const courseMaterials = mysqlTable("courseMaterials", {
   id: int("id").autoincrement().primaryKey(),
@@ -101,6 +127,7 @@ export const courseMaterialComments = mysqlTable("courseMaterialComments", {
   userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
   videoSecond: int("videoSecond"),
+  isDanmaku: int("isDanmaku").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("course_material_comments_material_idx").on(table.materialId, table.createdAt)]);
 
@@ -113,6 +140,17 @@ export const coursePracticeRuns = mysqlTable("coursePracticeRuns", {
   output: text("output").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, table => [index("course_practice_runs_user_material_idx").on(table.userId, table.materialId, table.createdAt)]);
+
+// 平台 AI 助手问答记录：含提问时的页面上下文，仅本人与授权运营可见。
+export const assistantChats = mysqlTable("assistantChats", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  question: text("question").notNull(),
+  answer: text("answer").notNull(),
+  pageRoute: varchar("pageRoute", { length: 200 }),
+  pageKind: varchar("pageKind", { length: 40 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => [index("assistant_chats_user_idx").on(table.userId, table.createdAt)]);
 
 export const newsSources = mysqlTable("newsSources", {
   id: int("id").autoincrement().primaryKey(),

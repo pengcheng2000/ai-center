@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import AIAssistantBall from "./components/AIAssistantBall";
 import Home from "./pages/Home";
 import LearningCenter from "./pages/LearningCenter";
 import Login from "./pages/Login";
@@ -31,5 +32,5 @@ function Router() {
   return <Switch><Route path="/" component={Home} /><Route path="/login" component={Login} /><Route path="/learn" component={LearningCenter} /><Route path="/learn/:pathId/course/:courseId" component={CourseDetail} /><Route path="/learn/:id" component={LearningPathDetail} /><Route path="/news" component={NewsCenter} /><Route path="/news/:id" component={NewsArticle} /><Route path="/community" component={Community} /><Route path="/community/new" component={Community} /><Route path="/community/:id" component={PostDetail} /><Route path="/apps" component={ApplicationCenter} /><Route path="/skills/submit" component={SkillSubmit} /><Route path="/skills/:id" component={SkillDetail} /><Route path="/skills" component={SkillsHub} /><Route path="/me" component={Profile} /><Route path="/operations" component={Operations} /><Route path="/operations/governance" component={GovernanceCenter} /><Route path="/operations/content" component={ContentOperations} /><Route path="/operations/lifecycle" component={ResourceLifecycleCenter} /><Route path="/operations/apps" component={ApplicationOperations} /><Route path="/operations/skills/import" component={SkillsDirectImport} /><Route path="/operations/skills" component={SkillsOperations} /><Route path="/operations/agent-imports" component={AgentImportOperations} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
 }
 
-function App() { return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster richColors position="top-center" /><Router /></TooltipProvider></ThemeProvider></ErrorBoundary>; }
+function App() { return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster richColors position="top-center" /><Router /><AIAssistantBall /></TooltipProvider></ThemeProvider></ErrorBoundary>; }
 export default App;

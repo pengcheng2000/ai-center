@@ -134,6 +134,34 @@
       "when": 1787900389506,
       "tag": "0018_zippy_grim_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1788226462423,
+      "tag": "0019_easy_wildside",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1788226679429,
+      "tag": "0020_wandering_violations",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1788229612484,
+      "tag": "0021_overconfident_veda",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1788249846330,
+      "tag": "0022_orange_the_professor",
+      "breakpoints": true
     }
   ]
 }
