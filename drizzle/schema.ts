@@ -115,6 +115,8 @@ export const courseMaterials = mysqlTable("courseMaterials", {
   storageKey: varchar("storageKey", { length: 600 }),
   mimeType: varchar("mimeType", { length: 120 }),
   content: text("content"),
+  contentHtml: text("contentHtml"),
+  contentFormat: mysqlEnum("contentFormat", ["html", "markdown", "plain"]).notNull().default("markdown"),
   config: json("config").$type<Record<string, unknown>>().notNull(),
   orderIndex: int("orderIndex").notNull().default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -214,6 +216,9 @@ export const communityPosts = mysqlTable("communityPosts", {
   title: varchar("title", { length: 180 }).notNull(),
   content: text("content").notNull(),
   contentHtml: text("contentHtml"),
+  contentMarkdown: text("contentMarkdown"),
+  // 历史帖子存 HTML（读取时转 Markdown 展示），新帖统一存 Markdown。
+  contentFormat: mysqlEnum("contentFormat", ["html", "markdown"]).notNull().default("html"),
   tags: json("tags").$type<string[]>().notNull(),
   quotePostId: int("quotePostId"),
   replyPolicy: mysqlEnum("replyPolicy", ["all", "mentioned", "experts", "operations"]).notNull().default("all"),
@@ -221,9 +226,14 @@ export const communityPosts = mysqlTable("communityPosts", {
   isFeatured: int("isFeatured").notNull().default(0),
   likeCount: int("likeCount").notNull().default(0),
   commentCount: int("commentCount").notNull().default(0),
+  isDeleted: int("isDeleted").notNull().default(0),
+  deletedAt: timestamp("deletedAt"),
+  deletedBy: int("deletedBy").references(() => users.id, { onDelete: "set null" }),
+  deletionReason: text("deletionReason"),
+  editedAt: timestamp("editedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, table => [index("community_posts_recent_idx").on(table.createdAt), index("community_posts_type_idx").on(table.postType)]);
+}, table => [index("community_posts_recent_idx").on(table.createdAt), index("community_posts_type_idx").on(table.postType), index("community_posts_deleted_idx").on(table.isDeleted, table.createdAt)]);
 
 export const postLikes = mysqlTable("postLikes", {
   id: int("id").autoincrement().primaryKey(),

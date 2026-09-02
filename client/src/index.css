@@ -23,10 +23,5 @@ button:active { transform: scale(.97); }
 .text-gradient { background: linear-gradient(100deg, #6d28d9 0%, #4f46e5 48%, #0891b2 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-.rich-editor:empty::before { content: attr(data-placeholder); color: #94a3b8; pointer-events: none; }
-.rich-editor img { max-height: 280px; max-width: 100%; border-radius: .75rem; margin: .75rem 0; object-fit: contain; }
-.rich-editor blockquote, .rich-content blockquote { border-left: 3px solid #8b5cf6; margin: .75rem 0; padding-left: .9rem; color: #64748b; }
-.rich-content img { max-width: 100%; border-radius: .75rem; margin: .75rem 0; }
-.rich-content a { color: #6d28d9; text-decoration: underline; }
 @media (prefers-reduced-motion: no-preference) { article, button, a { transition-duration: 180ms; transition-timing-function: cubic-bezier(.23, 1, .32, 1); } }
 @media (max-width: 640px) { .section-title { font-size: 2.65rem; } }

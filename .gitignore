@@ -118,3 +118,6 @@ client/public/__manus__/version.json
 
 # Manus 本地检查点（工具状态）
 .manus/
+
+# ZCode 会话目录（不入库）
+.zcode/

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
-import { ownedFavoriteValues, ownedProgressValues, ownedWorkspaceValues, parseAuditResult, personalInput, reviewStatusFromDecision, plainTextFromRichText, sanitizeRichText, validateImageDataUrl } from "./routers/platform";
+import { ownedFavoriteValues, ownedProgressValues, ownedWorkspaceValues, parseAuditResult, personalInput, reviewStatusFromDecision, validateImageDataUrl } from "./routers/platform";
 import { buildLearningRecommendations } from "./db";
 import type { TrpcContext } from "./_core/context";
 
@@ -84,15 +84,6 @@ describe("learning recommendation and audit contracts", () => {
 });
 
 describe("rich community content safeguards", () => {
-  it("removes executable rich-text blocks and event handlers before storage", () => {
-    const result = sanitizeRichText('<p onclick="alert(1)">实践</p><script>alert(2)</script><img src="/api/files/demo.png" onerror="alert(3)">');
-    expect(result).toContain("实践");
-    expect(result).not.toContain("script");
-    expect(result).not.toContain("onclick");
-    expect(result).not.toContain("onerror");
-    expect(plainTextFromRichText("<p>一份 <strong>实践</strong></p>")).toBe("一份 实践");
-  });
-
   it("accepts image data URLs only when media type and payload are valid", () => {
     expect(validateImageDataUrl("data:image/png;base64,aGVsbG8=", "image/png").length).toBe(5);
     expect(() => validateImageDataUrl("data:text/plain;base64,aGVsbG8=", "image/png")).toThrow();

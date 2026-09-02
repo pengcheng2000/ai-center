@@ -29,7 +29,7 @@ const reviewTone: Record<Review, string> = { current: "bg-sky-50 text-sky-700", 
 const reviewText: Record<Review, string> = { current: "复审正常", due: "待复审", overdue: "复审逾期" };
 
 export default function ContentOperations() {
-  const { user, loading } = useAuth(); const [, setLocation] = useLocation(); const allowed = user?.role === "admin"; const utils = trpc.useUtils(); const { data, isLoading } = trpc.platform.operations.get.useQuery(undefined, { enabled: allowed });
+  const { user, loading } = useAuth(); const [, setLocation] = useLocation(); const allowed = user?.role === "admin"; const utils = trpc.useUtils(); const { data, isLoading, isError, error, refetch } = trpc.platform.operations.get.useQuery(undefined, { enabled: allowed });
   const [path, setPath] = useState<PathDraft | null>(null); const [course, setCourse] = useState<CourseDraft | null>(null);
   const refresh = () => utils.platform.operations.get.invalidate();
   const addPath = trpc.platform.operations.addPath.useMutation({ onSuccess: () => { toast.success("学习路径已保存"); setPath(null); refresh(); }, onError: error => toast.error(error.message) });
@@ -37,7 +37,7 @@ export default function ContentOperations() {
   const addCourse = trpc.platform.operations.addCourse.useMutation({ onSuccess: () => { toast.success("课程已保存"); setCourse(null); refresh(); }, onError: error => toast.error(error.message) });
   const updateCourse = trpc.platform.operations.updateCourse.useMutation({ onSuccess: () => { toast.success("课程台账已更新"); setCourse(null); refresh(); }, onError: error => toast.error(error.message) });
   if (loading || (allowed && isLoading)) return <PlatformShell><div className="grid min-h-[65vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div></PlatformShell>;
-  if (!allowed || !data) return <PlatformShell><main className="grid min-h-[65vh] place-items-center text-center"><div><h1 className="font-serif text-3xl font-semibold">仅运营管理员可访问</h1><Button onClick={() => setLocation("/")} className="mt-6">返回工作台</Button></div></main></PlatformShell>;
+  if (!allowed || !data) return <PlatformShell><main className="grid min-h-[65vh] place-items-center text-center"><div><h1 className="font-serif text-3xl font-semibold">{isError ? "运营数据加载失败" : "仅运营管理员可访问"}</h1><p className="mt-4 max-w-md text-sm leading-6 text-slate-500">{isError ? error?.message || "运营数据暂时不可用，请稍后重试。" : "课程、资源和复审台账仅对运营管理员开放。"}</p><div className="mt-6 flex justify-center gap-3">{isError && <Button variant="outline" onClick={() => void refetch()}>重试</Button>}<Button onClick={() => setLocation("/operations")}>返回运营管理</Button></div></div></main></PlatformShell>;
   const savePath = () => { if (!path) return; const payload = { ...path, reviewDueAt: path.reviewDueAt || null, changeNote: path.changeNote || null, tags: split(path.tags), prerequisitePathIds: splitIds(path.prerequisitePathIds) }; if (path.id) updatePath.mutate({ ...payload, id: path.id }); else addPath.mutate(payload); };
   const saveCourse = () => { if (!course) return; const payload = { ...course, resourceUrl: course.resourceUrl || null, reviewDueAt: course.reviewDueAt || null, changeNote: course.changeNote || null, tags: split(course.tags), prerequisiteCourseIds: splitIds(course.prerequisiteCourseIds) }; if (course.id) updateCourse.mutate({ ...payload, id: course.id }); else addCourse.mutate(payload); };
   const { learningMetrics } = data;

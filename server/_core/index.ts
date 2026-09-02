@@ -12,6 +12,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerScheduledNewsRoutes, restoreScheduledRssSyncJobs } from "../scheduledNews";
 import { registerAgentImportRoutes } from "../agentImport";
+import { registerAssistantStreamRoute } from "../assistantStream";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -43,6 +44,7 @@ async function startServer() {
   registerCourseMaterialUpload(app);
   registerScheduledNewsRoutes(app);
   registerAgentImportRoutes(app);
+  registerAssistantStreamRoute(app);
   // tRPC API
   app.use(
     "/api/trpc",

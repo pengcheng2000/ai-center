@@ -341,6 +341,74 @@ const fetchWithBackoff = async (
     : new Error("LLM request failed after exhausting retries");
 };
 
+export type StreamChunk = { delta: string; model?: string };
+
+/** Read an OpenAI-compatible chat completion as incremental text chunks. */
+export async function* streamLLM(params: InvokeParams, signal?: AbortSignal): AsyncGenerator<StreamChunk> {
+  assertApiKey();
+  const { messages, tools, toolChoice, tool_choice, model, thinking, reasoning, maxTokens, max_tokens } = params;
+  const payload: Record<string, unknown> = {
+    messages: messages.map(normalizeMessage),
+    stream: true,
+  };
+  if (model) payload.model = model;
+  else {
+    if (!ENV.llmModel || ENV.llmModel.trim().length === 0) throw new Error("LLM_MODEL is not configured and no model was provided");
+    payload.model = ENV.llmModel;
+  }
+  if (tools && tools.length > 0) payload.tools = tools;
+  const normalizedToolChoice = normalizeToolChoice(toolChoice || tool_choice, tools);
+  if (normalizedToolChoice) payload.tool_choice = normalizedToolChoice;
+  const resolvedMaxTokens = max_tokens ?? maxTokens;
+  if (typeof resolvedMaxTokens === "number") payload.max_tokens = resolvedMaxTokens;
+  if (thinking) payload.thinking = thinking;
+  if (reasoning) payload.reasoning = reasoning;
+
+  const response = await fetch(resolveApiUrl(), {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${ENV.llmApiKey}`, accept: "text/event-stream" },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`LLM stream failed: ${response.status} ${response.statusText} – ${errorText}`);
+  }
+  if (!response.body) throw new Error("LLM stream returned an empty response body");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let modelId: string | undefined;
+  const processLine = (line: string): StreamChunk | null => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(":")) return null;
+    const data = trimmed.startsWith("data:") ? trimmed.slice(5).trim() : "";
+    if (!data || data === "[DONE]") return null;
+    let parsed: { model?: string; choices?: Array<{ delta?: { content?: unknown } }> };
+    try { parsed = JSON.parse(data); } catch { return null; }
+    if (parsed.model) modelId = parsed.model;
+    const content = parsed.choices?.[0]?.delta?.content;
+    return typeof content === "string" && content ? { delta: content, model: modelId } : null;
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const chunk = processLine(line);
+      if (chunk) yield chunk;
+    }
+    if (done) break;
+  }
+  if (buffer) {
+    const chunk = processLine(buffer);
+    if (chunk) yield chunk;
+  }
+}
+
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 

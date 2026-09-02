@@ -214,7 +214,7 @@ export async function getPublicCatalog(category?: string, fullTextOnly = false) 
     db.select({ category: newsItems.category }).from(newsItems).where(and(eq(newsItems.isDeleted, 0), eq(newsItems.reviewStatus, "approved"))).groupBy(newsItems.category),
     db.select().from(featureModules).where(and(eq(featureModules.isEnabled, 1), sql`${featureModules.audience} != 'admin'`)).orderBy(asc(featureModules.orderIndex)),
     db.select().from(enterpriseApps).where(and(eq(enterpriseApps.isEnabled, 1), sql`${enterpriseApps.audience} != 'admin'`)).orderBy(asc(enterpriseApps.orderIndex)),
-    db.select({ post: communityPosts, authorName: users.name }).from(communityPosts).leftJoin(users, eq(communityPosts.authorId, users.id)).orderBy(desc(communityPosts.isPinned), desc(communityPosts.createdAt)).limit(12),
+    db.select({ post: communityPosts, authorName: users.name }).from(communityPosts).leftJoin(users, eq(communityPosts.authorId, users.id)).where(eq(communityPosts.isDeleted, 0)).orderBy(desc(communityPosts.isPinned), desc(communityPosts.createdAt)).limit(12),
     db.select({ newsId: newsReadEvents.newsId, count: sql<number>`count(*)` }).from(newsReadEvents).groupBy(newsReadEvents.newsId),
     db.select({ newsId: newsFavorites.newsId, count: sql<number>`count(*)` }).from(newsFavorites).groupBy(newsFavorites.newsId),
   ]);
@@ -287,7 +287,7 @@ export async function getOperationsData() {
       db.select({ count: sql<number>`count(*)` }).from(newsItems),
       db.select({ count: sql<number>`count(*)` }).from(newsItems).where(inArray(newsItems.reviewStatus, ["pending", "needs_review"])),
       db.select({ count: sql<number>`count(distinct ${courseProgress.userId})` }).from(courseProgress),
-      db.select({ count: sql<number>`count(*)` }).from(communityPosts),
+      db.select({ count: sql<number>`count(*)` }).from(communityPosts).where(eq(communityPosts.isDeleted, 0)),
     ]),
     db.select({ average: sql<number>`coalesce(avg(${courseProgress.progress}), 0)` }).from(courseProgress),
   ]);

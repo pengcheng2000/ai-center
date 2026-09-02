@@ -1,0 +1,1 @@
+ALTER TABLE `communityPosts` ADD `contentMarkdown` text;

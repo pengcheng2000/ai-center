@@ -2,9 +2,11 @@
 // 组件只做渲染与交互，可测试的业务规则集中在这里。
 
 export const VIDEO_PLAYBACK_SPEEDS = [0.75, 1, 1.25, 1.5, 2] as const;
-export type DocumentDisplayMode = "markdown" | "image" | "pdf" | "link" | "missing";
+export type DocumentDisplayMode = "html" | "markdown" | "image" | "pdf" | "link" | "missing";
 
-export function resolveDocumentDisplay(input: { content?: string | null; mimeType?: string | null; url?: string | null }): DocumentDisplayMode {
+export function resolveDocumentDisplay(input: { content?: string | null; contentHtml?: string | null; contentFormat?: string | null; mimeType?: string | null; url?: string | null }): DocumentDisplayMode {
+  // HTML 快照由服务端清洗后保存；优先于派生的纯文本/Markdown 内容，保留原站排版。
+  if (input.contentFormat === "html" && input.contentHtml?.trim()) return "html";
   if (input.content?.trim()) return "markdown";
   if (input.mimeType?.startsWith("image/") && input.url) return "image";
   if (input.mimeType === "application/pdf" && input.url) return "pdf";
@@ -59,6 +61,20 @@ export function videoPercent(currentSecond: number, durationSeconds: number) {
 
 // PDF：页码 / 总页数直接换算百分比。
 export function pdfPercent(page: number, totalPages: number) { return totalPages > 0 ? clampPercent((page / totalPages) * 100) : 0; }
+
+// PDF 阅读策略：长文档默认单页，避免一次挂载所有页面；宽屏第一页通常来自 PPT 导出。
+export const LONG_PDF_PAGE_THRESHOLD = 12;
+export const PRESENTATION_ASPECT_RATIO_THRESHOLD = 1.3;
+export type PdfReadingProfile = "document" | "presentation";
+
+export function pdfReadingProfile(firstPageWidth: number, firstPageHeight: number): PdfReadingProfile {
+  if (!Number.isFinite(firstPageWidth) || !Number.isFinite(firstPageHeight) || firstPageHeight <= 0) return "document";
+  return firstPageWidth / firstPageHeight >= PRESENTATION_ASPECT_RATIO_THRESHOLD ? "presentation" : "document";
+}
+
+export function defaultPdfDisplayMode(totalPages: number, profile: PdfReadingProfile): "page" | "scroll" {
+  return profile === "presentation" || totalPages >= LONG_PDF_PAGE_THRESHOLD ? "page" : "scroll";
+}
 
 export function formatClock(totalSeconds: number) {
   const safe = Math.max(0, Math.floor(totalSeconds || 0));

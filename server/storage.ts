@@ -3,7 +3,7 @@
 // 的任何后端凭据。
 
 import { createHmac, randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ENV } from "./_core/env";
 
@@ -66,6 +66,17 @@ export async function writeStorageMeta(key: string, contentType: string): Promis
 export async function storageGet(relKey: string): Promise<{ key: string; url: string }> {
   const key = normalizeKey(relKey);
   return { key, url: `/api/files/${key}` };
+}
+
+// 删除附件文件与其 meta；文件已不存在时静默通过，便于重复清理与并发删除。
+export async function storageDelete(relKey: string): Promise<void> {
+  try {
+    const target = resolveStoragePath(relKey);
+    await rm(target, { force: true });
+    await rm(`${target}.meta.json`, { force: true });
+  } catch (error) {
+    console.warn("[Storage] 删除文件失败:", String(error));
+  }
 }
 
 export function createFileAccessToken(key: string, ttlMs = SIGNED_URL_TTL_MS): string {

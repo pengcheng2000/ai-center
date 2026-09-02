@@ -10,10 +10,10 @@ import { ChangeEvent, useState } from "react";
 import { toast } from "sonner";
 
 type Course = { id: number; title: string; pathId: number };
-type Material = { id: number; courseId: number; materialType: "document" | "video" | "practice"; sourceType: "url" | "file" | "inline"; title: string; description: string | null; sourceUrl: string | null; storageKey: string | null; mimeType: string | null; content: string | null; config: Record<string, unknown>; orderIndex: number };
-type Draft = Omit<Material, "id" | "description" | "sourceUrl" | "storageKey" | "mimeType" | "content"> & { id?: number; courseId: number; description: string; sourceUrl: string; storageKey: string; mimeType: string; content: string; configText: string };
-type UploadResult = { storageKey: string; url: string; mimeType: string; fileName: string; sizeBytes: number };
-const blank = (courseId: number): Draft => ({ courseId, materialType: "document", sourceType: "url", title: "", description: "", sourceUrl: "", storageKey: "", mimeType: "", content: "", config: {}, configText: "", orderIndex: 10 });
+type Material = { id: number; courseId: number; materialType: "document" | "video" | "practice"; sourceType: "url" | "file" | "inline"; title: string; description: string | null; sourceUrl: string | null; storageKey: string | null; mimeType: string | null; content: string | null; contentHtml: string | null; contentFormat: "html" | "markdown" | "plain"; provider?: string | null; canonicalUrl?: string | null; config: Record<string, unknown>; orderIndex: number };
+type Draft = Omit<Material, "id" | "description" | "sourceUrl" | "storageKey" | "mimeType" | "content" | "contentHtml" | "provider" | "canonicalUrl"> & { id?: number; courseId: number; description: string; sourceUrl: string; storageKey: string; mimeType: string; content: string; contentHtml: string; contentFormat: "html" | "markdown" | "plain"; provider: string; canonicalUrl: string; configText: string };
+type UploadResult = { storageKey: string; url: string; mimeType: string; fileName: string; sizeBytes: number; contentHtml?: string | null; contentFormat?: "html" | "markdown" | "plain"; provider?: string | null; canonicalUrl?: string | null };
+const blank = (courseId: number): Draft => ({ courseId, materialType: "document", sourceType: "url", title: "", description: "", sourceUrl: "", storageKey: "", mimeType: "", content: "", contentHtml: "", contentFormat: "markdown", provider: "", canonicalUrl: "", config: {}, configText: "", orderIndex: 10 });
 const Icon = ({ type }: { type: Material["materialType"] }) => type === "video" ? <PlaySquare className="h-4 w-4" /> : type === "practice" ? <Sparkles className="h-4 w-4" /> : <FileText className="h-4 w-4" />;
 const materialTypeLabel: Record<Material["materialType"], string> = { document: "文档", video: "视频", practice: "实操" };
 const sourceTypeLabel: Record<Material["sourceType"], string> = { file: "上传文件", inline: "内联内容", url: "外部链接" };
@@ -52,21 +52,22 @@ export function CourseMaterialManager({ courses, materials, refresh }: { courses
   const captureUrl = async () => {
     if (!draft?.sourceUrl) return toast.error("请先输入公开文档 URL");
     const result = await capture.mutateAsync({ url: draft.sourceUrl });
-    setDraft({ ...draft, sourceType: "url", title: draft.title || result.title, description: draft.description || result.summary, content: result.content, mimeType: result.mimeType, sourceUrl: result.sourceUrl });
-    toast.success("已采集标题、摘要和正文，请确认后保存");
+    setDraft({ ...draft, sourceType: "url", title: draft.title || result.title, description: draft.description || result.summary, content: result.content, contentHtml: result.contentHtml || "", contentFormat: result.contentFormat || (result.contentHtml ? "html" : "markdown"), provider: result.provider || "", canonicalUrl: result.canonicalUrl || "", mimeType: result.mimeType, sourceUrl: result.sourceUrl });
+    toast.success(result.contentHtml ? "已采集标题、摘要和排版正文，请确认后保存" : "已采集标题、摘要和正文，请确认后保存");
   };
 
   const onFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !draft) return;
-    const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/markdown", "text/plain", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"];
-    if (!allowed.includes(file.type)) return toast.error("仅支持 PDF、Word、Markdown、文本、图片、MP4 或 WebM");
+    const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/markdown", "text/plain", "text/html", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"];
+    if (!allowed.includes(file.type)) return toast.error("仅支持 PDF、Word、Markdown、文本、HTML、图片、MP4 或 WebM");
     if (file.size > MAX_UPLOAD_BYTES) return toast.error(`单个资源文件不能超过 ${formatSize(MAX_UPLOAD_BYTES)}`);
     setUploadPercent(0);
     try {
       const result = await uploadCourseFile(file, setUploadPercent);
       const isVideo = result.mimeType.startsWith("video/");
-      setDraft({ ...draft, materialType: isVideo ? "video" : draft.materialType, sourceType: "file", title: draft.title || result.fileName, storageKey: result.storageKey, mimeType: result.mimeType, sourceUrl: "" });
+      const contentFormat = result.contentFormat || (result.contentHtml ? "html" : result.mimeType === "text/plain" ? "plain" : "markdown");
+      setDraft({ ...draft, materialType: isVideo ? "video" : draft.materialType, sourceType: "file", title: draft.title || result.fileName, storageKey: result.storageKey, mimeType: result.mimeType, sourceUrl: "", contentHtml: result.contentHtml || "", contentFormat, provider: result.provider || "", canonicalUrl: result.canonicalUrl || "" });
       toast.success(`${result.fileName}（${formatSize(result.sizeBytes)}）上传完成${isVideo ? "，类型已切换为视频型" : ""}，请保存资源`);
     } catch (uploadError) {
       toast.error(uploadError instanceof Error ? uploadError.message : "上传失败，请重试");
@@ -79,7 +80,7 @@ export function CourseMaterialManager({ courses, materials, refresh }: { courses
     if (!draft) return;
     let config: Record<string, unknown> = {};
     try { config = draft.configText.trim() ? JSON.parse(draft.configText) : {}; } catch { return toast.error("实操配置必须是合法 JSON"); }
-    const payload = { ...draft, description: draft.description || null, sourceUrl: draft.sourceUrl || null, storageKey: draft.storageKey || null, mimeType: draft.mimeType || null, content: draft.content || null, config };
+    const payload = { ...draft, description: draft.description || null, sourceUrl: draft.sourceUrl || null, storageKey: draft.storageKey || null, mimeType: draft.mimeType || null, content: draft.content || null, contentHtml: draft.contentHtml || null, provider: draft.provider || null, canonicalUrl: draft.canonicalUrl || null, config };
     if (draft.id) update.mutate({ ...payload, id: draft.id });
     else add.mutate(payload);
   };
@@ -108,7 +109,7 @@ export function CourseMaterialManager({ courses, materials, refresh }: { courses
             <p className="mt-1 line-clamp-2 text-xs text-slate-400">{item.description || item.sourceUrl || item.mimeType || "待补充说明"}</p>
           </div>
           <div className="flex shrink-0 flex-col gap-1.5">
-            <Button size="sm" variant="ghost" onClick={() => setDraft({ ...item, description: item.description || "", sourceUrl: item.sourceUrl || "", storageKey: item.storageKey || "", mimeType: item.mimeType || "", content: item.content || "", configText: Object.keys(item.config).length ? JSON.stringify(item.config, null, 2) : "" })}>维护</Button>
+            <Button size="sm" variant="ghost" onClick={() => setDraft({ ...item, description: item.description || "", sourceUrl: item.sourceUrl || "", storageKey: item.storageKey || "", mimeType: item.mimeType || "", content: item.content || "", contentHtml: item.contentHtml || (typeof item.config.contentHtml === "string" ? item.config.contentHtml : ""), contentFormat: item.contentFormat || (typeof item.config.contentFormat === "string" ? item.config.contentFormat as Draft["contentFormat"] : "markdown"), provider: item.provider || (typeof item.config.provider === "string" ? item.config.provider : ""), canonicalUrl: item.canonicalUrl || (typeof item.config.canonicalUrl === "string" ? item.config.canonicalUrl : ""), configText: Object.keys(item.config).length ? JSON.stringify(item.config, null, 2) : "" })}>维护</Button>
             <Button size="sm" variant="ghost" className="text-slate-400 hover:bg-rose-50 hover:text-rose-600" onClick={() => setPendingDelete(item)} aria-label={`删除 ${item.title}`}><Trash2 className="h-3.5 w-3.5" />删除</Button>
           </div>
         </div>
@@ -156,10 +157,10 @@ export function CourseMaterialManager({ courses, materials, refresh }: { courses
           <Textarea value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} placeholder="面向员工的学习说明" />
           {draft.materialType !== "practice" && <>
             <Input value={draft.sourceUrl} onChange={event => setDraft({ ...draft, sourceUrl: event.target.value })} placeholder={draft.materialType === "document" ? "公开文档 URL（可采集）或外部资源链接" : "MP4/WebM 视频 URL"} />
-            {draft.materialType === "document" && <Button variant="outline" disabled={!draft.sourceUrl || capture.isPending} onClick={captureUrl}><Link2 className="mr-2 h-4 w-4" />{capture.isPending ? "正在采集" : "采集 URL 文档"}</Button>}
+            {draft.materialType === "document" && <Button variant="outline" disabled={!draft.sourceUrl || capture.isPending} onClick={captureUrl}><Link2 className="mr-2 h-4 w-4" />{capture.isPending ? "正在采集" : "采集并保留排版"}</Button>}
             <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm text-slate-600">
-              <Upload className="h-4 w-4" />{uploadPercent !== null ? `正在上传… ${uploadPercent}%` : "上传 PDF / Word / Markdown / 图片 / 视频（单个不超过 1GB）"}
-              <input className="hidden" type="file" accept=".pdf,.docx,.md,.txt,.png,.jpg,.jpeg,.webp,.mp4,.webm" onChange={onFile} />
+              <Upload className="h-4 w-4" />{uploadPercent !== null ? `正在上传… ${uploadPercent}%` : "上传 PDF / Word / HTML / Markdown / 图片 / 视频（HTML 不超过 20MB，其它文件不超过 1GB）"}
+              <input className="hidden" type="file" accept=".pdf,.docx,.html,.htm,.md,.txt,.png,.jpg,.jpeg,.webp,.mp4,.webm" onChange={onFile} />
             </label>
             {uploadPercent !== null && <Progress value={uploadPercent} className="h-2" />}</>}
           {draft.materialType === "practice" && <>

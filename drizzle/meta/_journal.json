@@ -162,6 +162,27 @@
       "when": 1788249846330,
       "tag": "0022_orange_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1788322030450,
+      "tag": "0023_open_satana",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1788324118556,
+      "tag": "0024_abnormal_squadron_supreme",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1788335471331,
+      "tag": "0025_loose_rafael_vega",
+      "breakpoints": true
     }
   ]
 }

@@ -34,7 +34,7 @@ vi.mock("./_core/env", async importOriginal => ({
 vi.mock("./_core/llm", () => ({ invokeLLM: mocks.invokeLLM, listLLMModels: mocks.listLLMModels }));
 vi.mock("./_core/heartbeat", () => ({ createHeartbeatJob: mocks.createHeartbeatJob, updateHeartbeatJob: mocks.updateHeartbeatJob }));
 vi.mock("./rss", () => ({ fetchRssEntries: mocks.fetchRssEntries }));
-vi.mock("./storage", () => ({ storagePut: mocks.storagePut, storageGetSignedUrl: mocks.storageGetSignedUrl }));
+vi.mock("./storage", () => ({ storagePut: mocks.storagePut, storageGetSignedUrl: mocks.storageGetSignedUrl, storageDelete: vi.fn() }));
 vi.mock("./courseCapture", () => ({ capturePublicDocument: mocks.capturePublicDocument }));
 
 import { decodeSkillPackageUpload, ownedWorkspaceScope, platformRouter } from "./routers/platform";
@@ -147,10 +147,10 @@ describe("community interaction routes", () => {
       update: vi.fn(() => ({ set: vi.fn(() => ({ where: async () => undefined })) })),
     });
     const caller = platformRouter.createCaller(ctx("user"));
-    await expect(caller.community.create({ postType: "experience", title: "引用后的实践复盘", content: "引用前序方法并补充本团队的验证结果。", tags: ["复盘"], quotePostId: 4, replyPolicy: "all" })).resolves.toEqual({ success: true, postId: 19 });
+    await expect(caller.community.create({ postType: "experience", title: "引用后的实践复盘", markdown: "引用前序方法并补充本团队的验证结果。", tags: ["复盘"], quotePostId: 4, replyPolicy: "all" })).resolves.toEqual({ success: true, postId: 19 });
     expect(inserted).toEqual([expect.objectContaining({ authorId: 7, quotePostId: 4, replyPolicy: "all" })]);
     mocks.getDb.mockResolvedValue({ select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => [] }) }) })) });
-    await expect(caller.community.create({ postType: "experience", title: "不存在的引用", content: "尝试引用不存在实践应该被拒绝。", tags: [], quotePostId: 999, replyPolicy: "all" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(caller.community.create({ postType: "experience", title: "不存在的引用", markdown: "尝试引用不存在实践应该被拒绝。", tags: [], quotePostId: 999, replyPolicy: "all" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
 
@@ -507,12 +507,12 @@ describe("sustainable operations routes", () => {
 
   it("allows only administrators to maintain typed course resources and keeps video comments bound to the employee", async () => {
     const inserts: unknown[] = []; let selectCount = 0;
-    mocks.getDb.mockResolvedValue({ select: vi.fn(() => { selectCount += 1; if (selectCount === 1) return { from: () => ({ where: () => ({ limit: async () => [{ id: 3 }] }) }) }; return { from: () => ({ leftJoin: () => ({ where: () => ({ limit: async () => [{ material: { materialType: "video" }, lifecycleStatus: "published" }] }) }) }) }; }), insert: vi.fn(() => ({ values: vi.fn(async (value: unknown) => { inserts.push(value); }) })) });
+    mocks.getDb.mockResolvedValue({ select: vi.fn(() => { selectCount += 1; if (selectCount === 1) return { from: () => ({ where: () => ({ limit: async () => [{ id: 3 }] }) }) }; return { from: () => ({ leftJoin: () => ({ where: () => ({ limit: async () => [{ material: { materialType: "video" }, lifecycleStatus: "published" }] }) }) }) }; }), insert: vi.fn(() => ({ values: vi.fn((value: unknown) => { inserts.push(value); return { $returningId: async () => [{ id: 27 }] }; }) })) });
     const material = { courseId: 3, materialType: "document" as const, sourceType: "inline" as const, title: "提示词标准", description: "企业提示词规范文档", sourceUrl: null, storageKey: null, mimeType: "text/markdown", content: "# 规范\n\n可直接阅读。", config: {}, orderIndex: 1 };
     const admin = platformRouter.createCaller(ctx("admin")); const employee = platformRouter.createCaller(ctx("user"));
     await expect(admin.operations.addCourseMaterial(material)).resolves.toEqual({ success: true });
     await expect(employee.operations.addCourseMaterial(material)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(employee.learning.addComment({ materialId: 9, content: "这个案例很实用", videoSecond: 42 })).resolves.toEqual({ success: true });
+    await expect(employee.learning.addComment({ materialId: 9, content: "这个案例很实用", videoSecond: 42 })).resolves.toMatchObject({ comment: { id: 27, materialId: 9, content: "这个案例很实用", videoSecond: 42, isDanmaku: 0 }, authorName: "Mock User" });
     expect(inserts).toEqual(expect.arrayContaining([expect.objectContaining({ courseId: 3, materialType: "document", content: "# 规范\n\n可直接阅读。" }), expect.objectContaining({ materialId: 9, userId: 7, videoSecond: 42 })]));
   });
 

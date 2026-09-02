@@ -9,8 +9,12 @@ import { createHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
 import { DAILY_SYNC_CRON, syncRssSourceById } from "../newsSync";
 import { capturePublicDocument } from "../courseCapture";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
-import { storageGetSignedUrl, storagePut } from "../storage";
+import { storageDelete, storageGetSignedUrl, storagePut } from "../storage";
+import { markdownToPlainText, resolveAttachmentRefs, sanitizeMarkdown, stripAttachmentRef, toRenderableMarkdown, type StoredPostContent } from "../communityContent";
 import { AGENT_IMPORT_TARGETS, applyAgentImportJob, issueAgentImportToken } from "../agentImport";
+import { answerAssistant, assistantInput } from "../assistantService";
+import { sanitizeHtmlSnapshot } from "../safeHtml";
+export { ASSISTANT_PAGE_KIND_LABEL, ASSISTANT_SYSTEM_PROMPT } from "../assistantService";
 
 const stringArray = z.array(z.string().trim().min(1).max(48)).max(12);
 export const personalInput = {
@@ -56,13 +60,6 @@ function unwrapAuditJson(parsed: unknown): unknown {
   }
   return result;
 }
-export function sanitizeRichText(input: string) {
-  const withoutDangerousBlocks = input.replace(/<(script|style|iframe|object|embed)[^>]*>[\s\S]*?<\/\1>/gi, "");
-  const withoutHandlers = withoutDangerousBlocks.replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "").replace(/\sstyle\s*=\s*(['"]).*?\1/gi, "");
-  const onlyKnownTags = withoutHandlers.replace(/<(?!\/?(p|br|strong|b|em|i|u|ul|ol|li|blockquote|a|img|h2|h3)(\s|>|\/))/gi, "&lt;");
-  return onlyKnownTags.replace(/<a\s+([^>]*?)href\s*=\s*(['"])(?!https?:\/\/|\/)[^'"]*\2([^>]*)>/gi, "<a>").replace(/<img\b[^>]*>/gi, "<p>【已添加图片附件】</p>").trim();
-}
-export function plainTextFromRichText(input: string) { return input.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(); }
 export function validateImageDataUrl(dataUrl: string, mimeType: string) {
   const match = dataUrl.match(/^data:(image\/(png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
   if (!match || match[1] !== mimeType) throw new TRPCError({ code: "BAD_REQUEST", message: "仅支持 PNG、JPEG、WebP 或 GIF 图片" });
@@ -74,39 +71,28 @@ export function validateImageDataUrl(dataUrl: string, mimeType: string) {
 export const ANNOTATION_COLORS = ["amber", "violet", "rose", "emerald", "sky"] as const;
 export const annotationColorInput = z.enum(ANNOTATION_COLORS);
 
-// 平台 AI 助手的页面类型中文标签，注入系统提示词让模型理解用户所处位置。
-export const ASSISTANT_PAGE_KIND_LABEL: Record<string, string> = {
-  home: "工作台首页", learn: "学习中心", learningPath: "学习路径详情", course: "课程学习页",
-  newsList: "AI 资讯列表", newsArticle: "资讯文章阅读页", communityList: "实践社区列表", postDetail: "社区帖子详情",
-  skillsHub: "Skills 广场", skillDetail: "Skills 详情", profile: "个人空间", operations: "运营管理", apps: "应用中心", other: "其他页面",
-};
+// 社区帖子的作者/管理员判定：作者本人可编辑删除，管理员额外拥有治理权限。
+export function canManagePost(user: { id: number; role: "user" | "admin" }, authorId: number) {
+  return user.role === "admin" || user.id === authorId;
+}
 
-// 助手系统提示词：平台使用指导 + 页面上下文阅读协助，行为边界对齐企业规范。
-export const ASSISTANT_SYSTEM_PROMPT = [
-  "你是「全员 AI 能力提升平台」的内置 AI 助手小智，帮助员工用好平台、读懂内容、解答 AI 相关问题。",
-  "",
-  "## 平台功能速查（指导使用时以此为准，不确定的功能就说不知道）",
-  "- 工作台（/）：个人能力画像、学习推荐、常用入口。",
-  "- 学习中心（/learn）：按路径学习。视频支持弹幕/倍速/时间戳评论/断点续播；PDF 支持拖选标注（仅自己可见）与翻页进度；文档按滚动位置记进度；课程内可评论交流。观看与阅读进度自动累计，全部素材完成后自动结课。",
-  "- 学习路径详情（/learn/:id）：路径任务清单、整体进度、逐节直达。",
-  "- 课程学习页（/learn/:pathId/course/:courseId）：左侧学习内容 + 右侧学习导航（素材进度清单）。右下角悬浮球可打开本助手。",
-  "- AI 资讯（/news）：已审核的 AI 动态，文章页支持阅读记录与收藏。",
-  "- 实践社区（/community）：发帖、点赞、评论、话题关注。",
-  "- 应用中心（/apps）：企业 AI 应用入口。",
-  "- Skills 广场（/skills）：员工沉淀的可复用 AI 技能包，支持提交、评分、下载安装。",
-  "- 个人空间（/me）：能力画像与学习统计（连续天数、本周分钟数）。",
-  "",
-  "## 当前页面上下文",
-  "{{PAGE_CONTEXT}}",
-  "",
-  "## 回答要求",
-  "1. 若用户问「这个页面/这篇文章讲了什么」，优先基于页面上下文正文摘录作答；摘录不足时如实说明并建议用户补充。",
-  "2. 若用户问「怎么用/在哪里」，基于平台功能速查给出具体路径与操作步骤，必要时提示页面入口。",
-  "3. 若用户选中的文字在上下文中，回答时优先围绕选中内容（解释、翻译、改写、提炼）。",
-  "4. 涉及平台没有的功能，直说当前版本不支持，不要编造。",
-  "5. 不处理敏感个人信息与未公开经营数据；建议不构成业务审批结论。",
-  "6. 用简体中文，结构清晰，先结论后展开，篇幅与问题复杂度匹配。",
-].join("\n");
+// 发帖与编辑共用的入参：正文为 Markdown，内联图片以 attachment:{id} 引用已上传附件。
+const postWriteInput = z.object({
+  postType: z.enum(["experience", "question", "resource", "discussion"]),
+  title: z.string().trim().min(4).max(180),
+  markdown: z.string().min(1).max(30_000),
+  tags: stringArray,
+  quotePostId: z.number().int().positive().nullable().optional(),
+  replyPolicy: z.enum(["all", "mentioned", "experts", "operations"]).default("all"),
+  attachmentIds: z.array(z.number().int().positive()).max(8).optional(),
+});
+
+// 正文出库统一形态：历史 HTML 转 Markdown，内联附件占位换成本次请求的签名 URL。
+export function shapePostContent(post: StoredPostContent, attachments: Array<{ id: number; url: string }>) {
+  const markdown = resolveAttachmentRefs(toRenderableMarkdown(post), new Map(attachments.map(item => [item.id, item.url])));
+  return { markdown, preview: markdownToPlainText(markdown).slice(0, 240) };
+}
+
 const annotationRectInput = z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0.001).max(1), h: z.number().min(0.001).max(1) });
 export const annotationInput = z.object({ materialId: z.number().int().positive(), page: z.number().int().min(1).max(5_000), rects: z.array(annotationRectInput).min(1).max(8), note: z.string().trim().min(1).max(2_000), color: annotationColorInput.default("amber") }).strict();
 export function ownedAnnotationValues(userId: number, input: z.infer<typeof annotationInput>) { return { materialId: input.materialId, userId, page: input.page, rects: input.rects, note: input.note, color: input.color }; }
@@ -141,8 +127,9 @@ const skillReviewInput = z.object({ skillId: z.number().int().positive(), rating
 const agentImportKeyInput = z.object({ name: z.string().trim().min(2).max(120), allowedTargets: z.array(z.enum(AGENT_IMPORT_TARGETS)).min(1).max(3), expiresAt: z.string().datetime().nullable().default(null) });
 const pathInput = z.object({ title: z.string().min(2).max(160), description: z.string().min(8).max(2000), level: z.enum(["beginner", "intermediate", "advanced"]), category: z.string().min(2).max(80), duration: z.string().min(1).max(40), lessonCount: z.number().int().min(0).max(999), accent: z.string().min(2).max(24), tags: stringArray, prerequisitePathIds: z.array(z.number().int().positive()).max(12), lifecycleStatus: z.enum(["draft", "published", "archived"]), contentOwner: z.string().min(2).max(120).default("待指定"), businessOwner: z.string().min(2).max(120).default("待指定"), reviewStatus: z.enum(["current", "due", "overdue"]).default("current"), reviewDueAt: z.string().date().nullable().default(null), version: z.string().min(1).max(40).default("v1.0"), changeNote: z.string().max(2000).nullable().default(null), isFeatured: z.boolean() });
 const courseInput = z.object({ pathId: z.number().int().positive(), title: z.string().min(2).max(180), summary: z.string().min(8).max(2000), duration: z.string().min(1).max(32), orderIndex: z.number().int().min(0).max(999), resourceType: z.enum(["video", "article", "exercise", "template"]), resourceUrl: z.string().url().max(600).nullable(), tags: stringArray, prerequisiteCourseIds: z.array(z.number().int().positive()).max(12), lifecycleStatus: z.enum(["draft", "published", "archived"]), contentOwner: z.string().min(2).max(120).default("待指定"), businessOwner: z.string().min(2).max(120).default("待指定"), reviewStatus: z.enum(["current", "due", "overdue"]).default("current"), reviewDueAt: z.string().date().nullable().default(null), version: z.string().min(1).max(40).default("v1.0"), changeNote: z.string().max(2000).nullable().default(null) });
-const materialInput = z.object({ courseId: z.number().int().positive(), materialType: z.enum(["document", "video", "practice"]), sourceType: z.enum(["url", "file", "inline"]), title: z.string().min(2).max(180), description: z.string().max(2000).nullable().default(null), sourceUrl: z.string().url().max(600).nullable().default(null), storageKey: z.string().max(600).nullable().default(null), mimeType: z.string().max(120).nullable().default(null), content: z.string().max(20_000).nullable().default(null), config: z.record(z.string(), z.unknown()).default({}), orderIndex: z.number().int().min(0).max(999).default(0) }).superRefine((value, ctx) => { if (value.materialType === "practice" && value.sourceType !== "inline") ctx.addIssue({ code: "custom", message: "实操型资源仅支持内联任务配置" }); if (value.materialType !== "practice" && !value.sourceUrl && !value.storageKey && !value.content) ctx.addIssue({ code: "custom", message: "文档或视频至少需要链接、文件或内联内容" }); });
-const materialUploadInput = z.object({ fileName: z.string().min(1).max(180), mimeType: z.enum(["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/markdown", "text/plain", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]), dataUrl: z.string().min(20).max(18_000_000) });
+const materialContentFormat = z.enum(["html", "markdown", "plain"]).default("markdown");
+const materialInput = z.object({ courseId: z.number().int().positive(), materialType: z.enum(["document", "video", "practice"]), sourceType: z.enum(["url", "file", "inline"]), title: z.string().min(2).max(180), description: z.string().max(2000).nullable().default(null), sourceUrl: z.string().url().max(600).nullable().default(null), storageKey: z.string().max(600).nullable().default(null), mimeType: z.string().max(120).nullable().default(null), content: z.string().max(20_000).nullable().default(null), contentHtml: z.string().max(20_000).nullable().default(null), contentFormat: materialContentFormat, provider: z.string().max(120).nullable().default(null), canonicalUrl: z.string().url().max(600).nullable().default(null), config: z.record(z.string(), z.unknown()).default({}), orderIndex: z.number().int().min(0).max(999).default(0) }).superRefine((value, ctx) => { if (value.materialType === "practice" && value.sourceType !== "inline") ctx.addIssue({ code: "custom", message: "实操型资源仅支持内联任务配置" }); if (value.materialType !== "practice" && !value.sourceUrl && !value.storageKey && !value.content && !value.contentHtml) ctx.addIssue({ code: "custom", message: "文档或视频至少需要链接、文件或内联内容" }); });
+const materialUploadInput = z.object({ fileName: z.string().min(1).max(180), mimeType: z.enum(["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/markdown", "text/plain", "image/png", "image/jpeg", "image/webp", "video/mp4", "video/webm"]), dataUrl: z.string().min(20).max(18_000_000), contentHtml: z.string().max(20_000).nullable().optional(), contentFormat: materialContentFormat.optional(), provider: z.string().max(120).nullable().optional(), canonicalUrl: z.string().url().max(600).nullable().optional() });
 const topicInput = z.object({ name: z.string().min(2).max(80), description: z.string().min(4).max(280), color: z.string().min(2).max(24), isEnabled: z.boolean(), reviewStatus: z.enum(["current", "due", "overdue"]).default("current"), isFeatured: z.boolean() });
 
 function toFlag(value: boolean) { return value ? 1 : 0; }
@@ -318,7 +305,7 @@ export const platformRouter = router({
       ]);
       const materialIds = new Set(materials.map(material => material.id));
       return {
-        materials: await Promise.all(materials.map(async item => ({ ...item, signedUrl: item.storageKey ? await storageGetSignedUrl(item.storageKey) : null }))),
+        materials: await Promise.all(materials.map(async item => ({ ...item, contentHtml: item.contentHtml ?? (typeof item.config?.contentHtml === "string" ? item.config.contentHtml : null), contentFormat: item.contentFormat ?? (typeof item.config?.contentFormat === "string" ? item.config.contentFormat : "markdown"), provider: typeof item.config?.provider === "string" ? item.config.provider : null, canonicalUrl: typeof item.config?.canonicalUrl === "string" ? item.config.canonicalUrl : null, signedUrl: item.storageKey ? await storageGetSignedUrl(item.storageKey) : null }))),
         comments,
         runs: runs.filter(run => materialIds.has(run.materialId)),
         materialProgress: materialProgress.filter(item => materialIds.has(item.materialId)),
@@ -331,7 +318,9 @@ export const platformRouter = router({
       const [material] = await db.select({ material: courseMaterials, lifecycleStatus: courses.lifecycleStatus }).from(courseMaterials).leftJoin(courses, eq(courseMaterials.courseId, courses.id)).where(eq(courseMaterials.id, input.materialId)).limit(1);
       if (!material || material.lifecycleStatus !== "published") throw new TRPCError({ code: "NOT_FOUND", message: "该学习资源暂不可互动" });
       if (input.videoSecond !== null && !isVideoMaterial(material.material)) throw new TRPCError({ code: "BAD_REQUEST", message: "仅视频支持时间戳评论" });
-      await db.insert(courseMaterialComments).values({ materialId: input.materialId, userId: ctx.user.id, content: input.content, videoSecond: input.videoSecond, isDanmaku: input.isDanmaku ? 1 : 0 }); return { success: true };
+      const createdAt = new Date();
+      const [created] = await db.insert(courseMaterialComments).values({ materialId: input.materialId, userId: ctx.user.id, content: input.content, videoSecond: input.videoSecond, isDanmaku: input.isDanmaku ? 1 : 0, createdAt }).$returningId();
+      return { comment: { id: created.id, materialId: input.materialId, content: input.content, videoSecond: input.videoSecond, isDanmaku: input.isDanmaku ? 1 : 0, createdAt }, authorName: ctx.user.name };
     }),
     deleteComment: protectedProcedure.input(z.object({ commentId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
@@ -386,44 +375,7 @@ export const platformRouter = router({
   }),
   // 平台 AI 助手：知晓平台功能与当前浏览页面，可指导使用、协助阅读、解答问题。
   assistant: router({
-    chat: protectedProcedure.input(z.object({
-      question: z.string().trim().min(1).max(2_000),
-      // 当前页面上下文由前端采集：路由、页面类型、标题与正文摘录。
-      pageContext: z.object({
-        route: z.string().min(1).max(200),
-        pageKind: z.enum(["home", "learn", "learningPath", "course", "newsList", "newsArticle", "communityList", "postDetail", "skillsHub", "skillDetail", "profile", "operations", "apps", "other"]),
-        title: z.string().max(300).default(""),
-        excerpt: z.string().max(12_000).default(""),
-        selection: z.string().max(4_000).default(""),
-      }).nullable().default(null),
-      // 多轮对话历史（不含本次提问），最多保留最近 16 条。
-      history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(4_000) })).max(16).default([]),
-    })).mutation(async ({ ctx, input }) => {
-      const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
-      // 每人每天 60 次问答，防止刷接口占用受管网关额度。
-      const [usage] = await db.select({ count: sql<number>`count(*)` }).from(assistantChats).where(and(eq(assistantChats.userId, ctx.user.id), sql`date(${assistantChats.createdAt}) = curdate()`));
-      if (Number(usage?.count ?? 0) >= 60) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "AI 助手每天最多 60 次问答，请明天再试" });
-
-      const contextBlock = input.pageContext ? [
-        "<page_context>",
-        `当前用户正在浏览的页面：${input.pageContext.route}（${ASSISTANT_PAGE_KIND_LABEL[input.pageContext.pageKind] ?? input.pageContext.pageKind}）`,
-        input.pageContext.title ? `页面标题：${input.pageContext.title}` : "",
-        input.pageContext.selection ? `用户在页面上选中的文字：\n${input.pageContext.selection}` : "",
-        input.pageContext.excerpt ? `页面正文摘录：\n${input.pageContext.excerpt.slice(0, 12_000)}` : "",
-        "</page_context>",
-      ].filter(Boolean).join("\n") : "";
-
-      const messages = [
-        { role: "system" as const, content: ASSISTANT_SYSTEM_PROMPT.replace("{{PAGE_CONTEXT}}", contextBlock || "（用户未提供当前页面信息）") },
-        ...input.history.slice(-16).map(item => ({ role: item.role, content: item.content })),
-        { role: "user" as const, content: input.question },
-      ];
-      const response = await invokeLLM({ maxTokens: 2_000, messages });
-      const answer = response.choices[0]?.message?.content;
-      if (typeof answer !== "string" || !answer.trim()) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "AI 助手未返回可阅读的答复" });
-      await db.insert(assistantChats).values({ userId: ctx.user.id, question: input.question, answer: answer.slice(0, 16_000), pageRoute: input.pageContext?.route.slice(0, 200) ?? null, pageKind: input.pageContext?.pageKind ?? null });
-      return { answer: answer.slice(0, 16_000), modelId: response.model };
-    }),
+    chat: protectedProcedure.input(assistantInput).mutation(async ({ ctx, input }) => answerAssistant(ctx.user.id, input)),
     history: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb(); if (!db) return [];
       return db.select().from(assistantChats).where(eq(assistantChats.userId, ctx.user.id)).orderBy(desc(assistantChats.createdAt)).limit(50);
@@ -452,24 +404,35 @@ export const platformRouter = router({
       if (!db) return [];
       return db.select().from(postFavorites).where(eq(postFavorites.userId, ctx.user.id));
     }),
-    list: protectedProcedure.query(async () => {
+    list: protectedProcedure.query(async ({ ctx }) => {
       const db = await getDb();
       if (!db) return [];
-      const posts = await db.select({ post: communityPosts, authorName: users.name }).from(communityPosts).leftJoin(users, eq(communityPosts.authorId, users.id)).orderBy(sql`${communityPosts.isPinned} desc`, sql`${communityPosts.createdAt} desc`);
+      const posts = await db.select({ post: communityPosts, authorName: users.name }).from(communityPosts).leftJoin(users, eq(communityPosts.authorId, users.id)).where(eq(communityPosts.isDeleted, 0)).orderBy(sql`${communityPosts.isPinned} desc`, sql`${communityPosts.createdAt} desc`);
       const ids = posts.map(item => item.post.id);
       const attachments = ids.length ? await db.select().from(postAttachments).where(inArray(postAttachments.postId, ids)) : [];
-      return Promise.all(posts.map(async item => ({ ...item, attachments: await Promise.all(attachments.filter(attachment => attachment.postId === item.post.id).map(async attachment => ({ id: attachment.id, url: await storageGetSignedUrl(attachment.fileKey), fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes }))) })));
+      return Promise.all(posts.map(async item => {
+        const own = await Promise.all(attachments.filter(attachment => attachment.postId === item.post.id).map(async attachment => ({ id: attachment.id, url: await storageGetSignedUrl(attachment.fileKey), fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes })));
+        return { ...item, attachments: own, ...shapePostContent(item.post, own), canEdit: canManagePost(ctx.user, item.post.authorId), canModerate: ctx.user.role === "admin" };
+      }));
     }),
-    detail: protectedProcedure.input(z.object({ postId: z.number().int().positive() })).query(async ({ input }) => {
+    detail: protectedProcedure.input(z.object({ postId: z.number().int().positive() })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return null;
-      const [post] = await db.select({ post: communityPosts, authorName: users.name }).from(communityPosts).leftJoin(users, eq(communityPosts.authorId, users.id)).where(eq(communityPosts.id, input.postId)).limit(1);
+      const [post] = await db.select({ post: communityPosts, authorName: users.name }).from(communityPosts).leftJoin(users, eq(communityPosts.authorId, users.id)).where(and(eq(communityPosts.id, input.postId), eq(communityPosts.isDeleted, 0))).limit(1);
       if (!post) return null;
-      const [attachments, comments] = await Promise.all([
+      const [attachmentRows, comments] = await Promise.all([
         db.select().from(postAttachments).where(eq(postAttachments.postId, input.postId)),
         db.select({ comment: postComments, authorName: users.name }).from(postComments).leftJoin(users, eq(postComments.authorId, users.id)).where(eq(postComments.postId, input.postId)).orderBy(postComments.createdAt),
       ]);
-      return { ...post, attachments: await Promise.all(attachments.map(async attachment => ({ id: attachment.id, url: await storageGetSignedUrl(attachment.fileKey), fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes }))), comments };
+      const attachments = await Promise.all(attachmentRows.map(async attachment => ({ id: attachment.id, url: await storageGetSignedUrl(attachment.fileKey), fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes })));
+      return {
+        ...post,
+        attachments,
+        ...shapePostContent(post.post, attachments),
+        canEdit: canManagePost(ctx.user, post.post.authorId),
+        canModerate: ctx.user.role === "admin",
+        comments: comments.map(item => ({ ...item, canDelete: canManagePost(ctx.user, item.comment.authorId) })),
+      };
     }),
     attachmentAccess: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ input }) => {
       const db = await getDb();
@@ -489,36 +452,116 @@ export const platformRouter = router({
       return { id: attachment.id, url: await storageGetSignedUrl(uploaded.key), fileName: safeName, mimeType: input.mimeType, sizeBytes: buffer.length };
     }),
     discardAttachment: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      // 草稿附件删除时同时清理磁盘文件，避免上传后取消发帖留下孤儿文件。
+      if (db) {
+        const [draft] = await db.select({ fileKey: postAttachments.fileKey }).from(postAttachments).where(and(eq(postAttachments.id, input.id), eq(postAttachments.ownerId, ctx.user.id), isNull(postAttachments.postId))).limit(1);
+        if (draft) await storageDelete(draft.fileKey);
+      }
       return discardDraftAttachmentForUser(ctx.user.id, input.id);
     }),
-    comments: publicProcedure.input(z.object({ postId: z.number().int().positive() })).query(async ({ input }) => {
+    comments: protectedProcedure.input(z.object({ postId: z.number().int().positive() })).query(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) return [];
-      return db.select({ comment: postComments, authorName: users.name }).from(postComments).leftJoin(users, eq(postComments.authorId, users.id)).where(eq(postComments.postId, input.postId)).orderBy(postComments.createdAt);
+      const rows = await db.select({ comment: postComments, authorName: users.name }).from(postComments).leftJoin(users, eq(postComments.authorId, users.id)).where(eq(postComments.postId, input.postId)).orderBy(postComments.createdAt);
+      return rows.map(item => ({ ...item, canDelete: canManagePost(ctx.user, item.comment.authorId) }));
     }),
-    create: protectedProcedure.input(z.object({ postType: z.enum(["experience", "question", "resource", "discussion"]), title: z.string().min(4).max(180), content: z.string().min(12).max(6000), contentHtml: z.string().max(30000).optional(), tags: stringArray, quotePostId: z.number().int().positive().nullable().optional(), replyPolicy: z.enum(["all", "mentioned", "experts", "operations"]).default("all"), attachmentIds: z.array(z.number().int().positive()).max(8).optional() })).mutation(async ({ ctx, input }) => {
+    create: protectedProcedure.input(postWriteInput).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
-      const contentHtml = input.contentHtml ? sanitizeRichText(input.contentHtml) : null;
-      const content = contentHtml ? plainTextFromRichText(contentHtml).slice(0, 6000) : input.content;
+      const markdown = sanitizeMarkdown(input.markdown);
+      const content = markdownToPlainText(markdown).slice(0, 6_000);
+      if (!content) throw new TRPCError({ code: "BAD_REQUEST", message: "正文内容不能为空，请补充实践细节" });
       if (input.quotePostId) {
-        const [quoted] = await db.select({ id: communityPosts.id }).from(communityPosts).where(eq(communityPosts.id, input.quotePostId)).limit(1);
+        const [quoted] = await db.select({ id: communityPosts.id }).from(communityPosts).where(and(eq(communityPosts.id, input.quotePostId), eq(communityPosts.isDeleted, 0))).limit(1);
         if (!quoted) throw new TRPCError({ code: "NOT_FOUND", message: "被引用的实践不存在" });
       }
-      const [post] = await db.insert(communityPosts).values({ authorId: ctx.user.id, postType: input.postType, title: input.title, content, contentHtml, tags: input.tags, quotePostId: input.quotePostId ?? null, replyPolicy: input.replyPolicy }).$returningId();
+      const [post] = await db.insert(communityPosts).values({ authorId: ctx.user.id, postType: input.postType, title: input.title, content, contentMarkdown: markdown, contentFormat: "markdown", tags: input.tags, quotePostId: input.quotePostId ?? null, replyPolicy: input.replyPolicy }).$returningId();
       if (input.attachmentIds?.length) {
         await db.update(postAttachments).set({ postId: post.id }).where(and(inArray(postAttachments.id, input.attachmentIds), eq(postAttachments.ownerId, ctx.user.id), isNull(postAttachments.postId)));
       }
       return { success: true, postId: post.id };
     }),
+    update: protectedProcedure.input(postWriteInput.extend({ postId: z.number().int().positive(), removedAttachmentIds: z.array(z.number().int().positive()).max(8).optional() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      const [existing] = await db.select({ id: communityPosts.id, authorId: communityPosts.authorId }).from(communityPosts).where(and(eq(communityPosts.id, input.postId), eq(communityPosts.isDeleted, 0))).limit(1);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "该实践不存在或已删除" });
+      if (!canManagePost(ctx.user, existing.authorId)) throw new TRPCError({ code: "FORBIDDEN", message: "只能编辑自己发布的实践" });
+      // 作者移除的图片同时从正文里清掉内联引用，避免出现指向已删附件的空图。
+      let markdown = sanitizeMarkdown(input.markdown);
+      for (const removedId of input.removedAttachmentIds ?? []) markdown = stripAttachmentRef(markdown, removedId);
+      const content = markdownToPlainText(markdown).slice(0, 6_000);
+      if (!content) throw new TRPCError({ code: "BAD_REQUEST", message: "正文内容不能为空，请补充实践细节" });
+      await db.update(communityPosts).set({ postType: input.postType, title: input.title, content, contentMarkdown: markdown, contentFormat: "markdown", tags: input.tags, replyPolicy: input.replyPolicy, editedAt: new Date() }).where(eq(communityPosts.id, input.postId));
+      if (input.attachmentIds?.length) {
+        await db.update(postAttachments).set({ postId: input.postId }).where(and(inArray(postAttachments.id, input.attachmentIds), eq(postAttachments.ownerId, ctx.user.id), isNull(postAttachments.postId)));
+      }
+      if (input.removedAttachmentIds?.length) {
+        const removable = await db.select({ id: postAttachments.id, fileKey: postAttachments.fileKey }).from(postAttachments).where(and(inArray(postAttachments.id, input.removedAttachmentIds), eq(postAttachments.postId, input.postId)));
+        for (const attachment of removable) await storageDelete(attachment.fileKey);
+        if (removable.length) await db.delete(postAttachments).where(inArray(postAttachments.id, removable.map(item => item.id)));
+      }
+      return { success: true, postId: input.postId };
+    }),
+    remove: protectedProcedure.input(z.object({ postId: z.number().int().positive(), reason: z.string().trim().max(1_200).optional() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      const [existing] = await db.select({ id: communityPosts.id, authorId: communityPosts.authorId }).from(communityPosts).where(and(eq(communityPosts.id, input.postId), eq(communityPosts.isDeleted, 0))).limit(1);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "该实践不存在或已删除" });
+      if (!canManagePost(ctx.user, existing.authorId)) throw new TRPCError({ code: "FORBIDDEN", message: "只能删除自己发布的实践" });
+      const isModeration = ctx.user.id !== existing.authorId;
+      if (isModeration && !input.reason) throw new TRPCError({ code: "BAD_REQUEST", message: "管理员删除他人实践必须填写处置原因" });
+      await db.update(communityPosts).set({ isDeleted: 1, deletedAt: new Date(), deletedBy: ctx.user.id, deletionReason: input.reason ?? (isModeration ? "运营处置" : "作者主动删除") }).where(eq(communityPosts.id, input.postId));
+      return { success: true };
+    }),
+    restore: adminProcedure.input(z.object({ postId: z.number().int().positive(), reason: z.string().trim().min(2).max(1_200) })).mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      await db.update(communityPosts).set({ isDeleted: 0, deletedAt: null, deletedBy: null, deletionReason: `已恢复：${input.reason}` }).where(eq(communityPosts.id, input.postId));
+      return { success: true };
+    }),
+    setPromotion: adminProcedure.input(z.object({ postId: z.number().int().positive(), isPinned: z.boolean().optional(), isFeatured: z.boolean().optional() })).mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      if (input.isPinned === undefined && input.isFeatured === undefined) throw new TRPCError({ code: "BAD_REQUEST", message: "请指定要调整的置顶或精选状态" });
+      await db.update(communityPosts).set({ ...(input.isPinned === undefined ? {} : { isPinned: toFlag(input.isPinned) }), ...(input.isFeatured === undefined ? {} : { isFeatured: toFlag(input.isFeatured) }) }).where(eq(communityPosts.id, input.postId));
+      return { success: true };
+    }),
+    adminPosts: adminProcedure.input(z.object({ status: z.enum(["all", "visible", "deleted"]).default("all"), search: z.string().trim().max(120).optional() }).optional()).query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const status = input?.status ?? "all";
+      const search = input?.search?.trim();
+      const rows = await db.select({ post: communityPosts, authorName: users.name }).from(communityPosts).leftJoin(users, eq(communityPosts.authorId, users.id)).where(and(
+        status === "all" ? undefined : eq(communityPosts.isDeleted, status === "deleted" ? 1 : 0),
+        search ? or(like(communityPosts.title, `%${search}%`), like(communityPosts.content, `%${search}%`)) : undefined,
+      )).orderBy(desc(communityPosts.updatedAt)).limit(80);
+      return rows.map(({ post, authorName }) => ({
+        id: post.id, title: post.title, postType: post.postType, authorName, preview: markdownToPlainText(toRenderableMarkdown(post)).slice(0, 160),
+        isPinned: Boolean(post.isPinned), isFeatured: Boolean(post.isFeatured), isDeleted: Boolean(post.isDeleted),
+        deletionReason: post.deletionReason, deletedAt: post.deletedAt, deletedBy: post.deletedBy,
+        likeCount: post.likeCount, commentCount: post.commentCount, createdAt: post.createdAt, updatedAt: post.updatedAt,
+      }));
+    }),
     createComment: protectedProcedure.input(z.object({ postId: z.number().int().positive(), content: z.string().min(2).max(2000) })).mutation(async ({ ctx, input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
-      const [post] = await db.select({ replyPolicy: communityPosts.replyPolicy }).from(communityPosts).where(eq(communityPosts.id, input.postId)).limit(1);
+      const [post] = await db.select({ replyPolicy: communityPosts.replyPolicy }).from(communityPosts).where(and(eq(communityPosts.id, input.postId), eq(communityPosts.isDeleted, 0))).limit(1);
       if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "实践不存在" });
       if (post.replyPolicy === "operations" && ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "该实践仅允许运营人员评论" });
       await db.insert(postComments).values({ authorId: ctx.user.id, ...input });
       await db.update(communityPosts).set({ commentCount: sql`${communityPosts.commentCount} + 1` }).where(eq(communityPosts.id, input.postId));
+      return { success: true };
+    }),
+    deleteComment: protectedProcedure.input(z.object({ commentId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
+      const [existing] = await db.select({ id: postComments.id, authorId: postComments.authorId, postId: postComments.postId }).from(postComments).where(eq(postComments.id, input.commentId)).limit(1);
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "该讨论不存在" });
+      if (!canManagePost(ctx.user, existing.authorId)) throw new TRPCError({ code: "FORBIDDEN", message: "只能删除自己发布的讨论" });
+      await db.delete(postComments).where(eq(postComments.id, input.commentId));
+      await db.update(communityPosts).set({ commentCount: sql`greatest(${communityPosts.commentCount} - 1, 0)` }).where(eq(communityPosts.id, existing.postId));
       return { success: true };
     }),
     toggleLike: protectedProcedure.input(z.object({ postId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
@@ -647,20 +690,25 @@ export const platformRouter = router({
       const { id, reviewDueAt, ...values } = input; await db.update(courses).set({ ...values, resourceUrl: values.resourceUrl ?? null, reviewDueAt: reviewDueAt ? new Date(`${reviewDueAt}T00:00:00.000Z`) : null }).where(eq(courses.id, id)); return { success: true };
     }),
     captureDocumentUrl: adminProcedure.input(z.object({ url: z.string().url().max(600) })).mutation(async ({ input }) => {
-      try { return await capturePublicDocument(input.url); } catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "文档采集失败" }); }
+      try {
+        const captured = await capturePublicDocument(input.url);
+        return { ...captured, contentHtml: captured.contentHtml ? sanitizeHtmlSnapshot(captured.contentHtml) : null, contentFormat: captured.contentFormat ?? (captured.mimeType === "text/html" ? "html" : captured.mimeType === "text/markdown" ? "markdown" : "plain"), provider: captured.provider ?? null, canonicalUrl: captured.canonicalUrl ?? null };
+      } catch (error) { throw new TRPCError({ code: "BAD_REQUEST", message: error instanceof Error ? error.message : "文档采集失败" }); }
     }),
     uploadCourseMaterialFile: adminProcedure.input(materialUploadInput).mutation(async ({ input }) => {
       const buffer = decodeMaterialUpload(input.dataUrl, input.mimeType); const safeName = input.fileName.replace(/[^\w.\-\u4e00-\u9fa5]/g, "_");
-      const { key, url } = await storagePut(`course-materials/${Date.now()}-${safeName}`, buffer, input.mimeType); return { storageKey: key, url, mimeType: input.mimeType, fileName: input.fileName, sizeBytes: buffer.length };
+      const { key, url } = await storagePut(`course-materials/${Date.now()}-${safeName}`, buffer, input.mimeType); return { storageKey: key, url, mimeType: input.mimeType, fileName: input.fileName, sizeBytes: buffer.length, contentHtml: input.contentHtml ? sanitizeHtmlSnapshot(input.contentHtml) : null, contentFormat: input.contentFormat ?? (input.mimeType === "text/plain" ? "plain" : input.mimeType === "text/markdown" ? "markdown" : "markdown"), provider: input.provider ?? null, canonicalUrl: input.canonicalUrl ?? null };
     }),
     addCourseMaterial: adminProcedure.input(materialInput).mutation(async ({ input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
       const [course] = await db.select({ id: courses.id }).from(courses).where(eq(courses.id, input.courseId)).limit(1); if (!course) throw new TRPCError({ code: "NOT_FOUND", message: "所属课程不存在" });
-      await db.insert(courseMaterials).values({ ...input, description: input.description ?? null, sourceUrl: input.sourceUrl ?? null, storageKey: input.storageKey ?? null, mimeType: input.mimeType ?? null, content: input.content ?? null }); return { success: true };
+      const { provider, canonicalUrl, ...material } = input;
+      const contentHtml = input.contentHtml ? sanitizeHtmlSnapshot(input.contentHtml) : null;
+      await db.insert(courseMaterials).values({ ...material, description: input.description ?? null, sourceUrl: input.sourceUrl ?? null, storageKey: input.storageKey ?? null, mimeType: input.mimeType ?? null, content: input.content ?? null, contentHtml, contentFormat: input.contentFormat, config: { ...input.config, ...(provider ? { provider } : {}), ...(canonicalUrl ? { canonicalUrl } : {}) } }); return { success: true };
     }),
     updateCourseMaterial: adminProcedure.input(materialInput.safeExtend({ id: z.number().int().positive() })).mutation(async ({ input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });
-      const { id, ...values } = input; await db.update(courseMaterials).set({ ...values, description: values.description ?? null, sourceUrl: values.sourceUrl ?? null, storageKey: values.storageKey ?? null, mimeType: values.mimeType ?? null, content: values.content ?? null }).where(eq(courseMaterials.id, id)); return { success: true };
+      const { id, provider, canonicalUrl, ...values } = input; const contentHtml = input.contentHtml ? sanitizeHtmlSnapshot(input.contentHtml) : null; await db.update(courseMaterials).set({ ...values, description: values.description ?? null, sourceUrl: values.sourceUrl ?? null, storageKey: values.storageKey ?? null, mimeType: values.mimeType ?? null, content: values.content ?? null, contentHtml, contentFormat: values.contentFormat, config: { ...values.config, ...(provider ? { provider } : {}), ...(canonicalUrl ? { canonicalUrl } : {}) } }).where(eq(courseMaterials.id, id)); return { success: true };
     }),
     deleteCourseMaterial: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ input }) => {
       const db = await getDb(); if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库暂不可用" });

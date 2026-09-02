@@ -3,6 +3,7 @@
 import PlatformShell from "@/components/PlatformShell";
 import DiscussionPanel from "@/components/learn/DiscussionPanel";
 import DocReader from "@/components/learn/DocReader";
+import HtmlReader from "@/components/learn/HtmlReader";
 import PdfReader, { type Annotation } from "@/components/learn/PdfReader";
 import VideoPlayer from "@/components/learn/VideoPlayer";
 import { Badge } from "@/components/ui/badge";
@@ -15,12 +16,12 @@ import { cn } from "@/lib/utils";
 import { workbenchRoutes } from "@/lib/routes";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ArrowLeft, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Clock3, ExternalLink, FileText, Highlighter, ListChecks, Loader2, PlayCircle, Settings2, Sparkles, Video } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
 
-type Material = { id: number; materialType: "document" | "video" | "practice"; sourceType: "url" | "file" | "inline"; title: string; description: string | null; sourceUrl: string | null; signedUrl: string | null; mimeType: string | null; content: string | null; config: Record<string, unknown>; orderIndex: number };
+type Material = { id: number; materialType: "document" | "video" | "practice"; sourceType: "url" | "file" | "inline"; title: string; description: string | null; sourceUrl: string | null; signedUrl: string | null; mimeType: string | null; content: string | null; contentHtml?: string | null; contentFormat?: "html" | "markdown" | "plain" | null; provider?: string | null; canonicalUrl?: string | null; config: Record<string, unknown>; orderIndex: number };
 type CommentRow = { comment: { id: number; materialId: number; content: string; videoSecond: number | null; isDanmaku: number; createdAt: Date }; authorName: string | null };
 type ProgressRow = { id: number; userId: number; materialId: number; position: number; percent: number; minutes: number };
 
@@ -31,12 +32,13 @@ export default function CourseDetail() {
   const pathId = Number(params?.pathId);
   const courseId = Number(params?.courseId);
   const { data: catalog, isLoading } = trpc.platform.catalog.useQuery();
-  const { data: experience } = trpc.platform.learning.courseExperience.useQuery({ courseId }, { enabled: Number.isInteger(courseId) && courseId > 0 });
+  const { data: experience, isLoading: experienceLoading, isError: experienceIsError, error: experienceError, refetch: refetchExperience } = trpc.platform.learning.courseExperience.useQuery({ courseId }, { enabled: Number.isInteger(courseId) && courseId > 0 });
   const utils = trpc.useUtils();
   const saveProgress = trpc.platform.learning.saveMaterialProgress.useMutation({
     onSuccess: result => { setShownCoursePercent(result.coursePercent); void utils.platform.personal.get.invalidate(); },
   });
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number> | null>(null);
   const [shownCoursePercent, setShownCoursePercent] = useState<number | null>(null);
   const materialEnterRef = useRef<Map<number, number>>(new Map());
   // 学习分钟数按“距上次上报的增量”累计：视频用累计播放秒，PDF/文档用页面停留秒，避免重复累计。
@@ -44,6 +46,9 @@ export default function CourseDetail() {
 
   const materials = experience?.materials as Material[] | undefined;
   const comments = (experience?.comments ?? []) as CommentRow[];
+  const [localComments, setLocalComments] = useState<CommentRow[]>([]);
+  useEffect(() => { setLocalComments(comments); }, [experience?.comments]);
+  const appendComment = useCallback((comment: CommentRow) => setLocalComments(current => [...current, comment]), []);
   const materialProgress = (experience?.materialProgress ?? []) as ProgressRow[];
   const annotations = (experience?.annotations ?? []) as Annotation[];
 
@@ -57,6 +62,16 @@ export default function CourseDetail() {
   const beginMaterial = useCallback((materialId: number) => {
     if (!materialEnterRef.current.has(materialId)) materialEnterRef.current.set(materialId, Date.now());
   }, []);
+
+  // 默认只挂载当前（或首个未完成）素材，避免 PDF/视频等重组件同时初始化。
+  const defaultMaterialId = activeMaterial?.id ?? null;
+  const isExpanded = (materialId: number) => expandedIds?.has(materialId) ?? materialId === defaultMaterialId;
+  const selectMaterial = useCallback((materialId: number) => {
+    setActiveId(materialId);
+    beginMaterial(materialId);
+    setExpandedIds(new Set([materialId]));
+    window.requestAnimationFrame(() => document.querySelector(`[data-material="${materialId}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [beginMaterial]);
 
   // 素材进度统一入口：position 视素材类型为秒数/页码/百分比；watchedSeconds 为本会话累计秒（缺省按页面停留时长）。
   const reportProgress = useCallback((material: Material, payload: { position: number; percent?: number; watchedSeconds?: number }) => {
@@ -73,6 +88,8 @@ export default function CourseDetail() {
   const path = catalog.paths.find(item => item.id === pathId);
   const course = catalog.courses.find(item => item.id === courseId && item.pathId === pathId);
   if (!path || !course) return <PlatformShell><main className="mx-auto max-w-3xl px-4 py-20"><h1 className="font-serif text-3xl">该课程暂不可用</h1><Button onClick={() => setLocation(`/learn/${pathId}`)} className="mt-6 rounded-lg">返回学习路径</Button></main></PlatformShell>;
+  if (experienceLoading) return <PlatformShell><div className="grid min-h-[70vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div></PlatformShell>;
+  if (experienceIsError) return <PlatformShell><main className="mx-auto grid min-h-[65vh] max-w-xl place-items-center px-5 text-center"><div><h1 className="font-serif text-3xl font-semibold">课程资源加载失败</h1><p className="mt-4 text-sm leading-6 text-slate-500">{experienceError?.message || "学习内容暂时不可用，请稍后重试。"}</p><div className="mt-6 flex justify-center gap-3"><Button variant="outline" onClick={() => void refetchExperience()}>重试</Button><Button onClick={() => setLocation(`/learn/${pathId}`)}>返回学习路径</Button></div></div></main></PlatformShell>;
 
   const coursePercent = shownCoursePercent ?? experience?.courseProgressRow?.progress ?? 0;
   const courseState = progressState(coursePercent);
@@ -114,7 +131,7 @@ export default function CourseDetail() {
           {/* 无素材时的兜底 */}
           {!materials?.length && (course.resourceUrl
             ? <a href={course.resourceUrl} target="_blank" rel="noreferrer" className="mt-6 flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-5 py-4 text-sm font-semibold text-violet-800 transition hover:bg-violet-100"><span>打开课程资源（资源负责人尚未挂载结构化素材）</span><ExternalLink className="h-4 w-4" /></a>
-            : <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">课程资源正在复审或维护中，完成阅读说明后可先标记学习进度。</div>)}
+            : <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-600"><p className="font-semibold text-slate-800">本课程暂无可学习资源</p><p className="mt-1">内容运营尚未挂载 PDF、视频或文档素材，请稍后再来。</p></div>)}
 
           {/* 素材内容 */}
           {materials?.map(material => {
@@ -123,58 +140,47 @@ export default function CourseDetail() {
             const state = progressState(row?.percent ?? 0);
             const isActive = activeMaterial?.id === material.id;
             const url = material.signedUrl || material.sourceUrl;
-            return <section key={material.id} className={cn("mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm", isActive ? "border-violet-300 ring-1 ring-violet-200" : "border-slate-200")}>
+            return <section key={material.id} data-material={material.id} className={cn("mt-6 overflow-hidden rounded-2xl border bg-white shadow-sm", isActive ? "border-violet-300 ring-1 ring-violet-200" : "border-slate-200")}>
               <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">{MATERIAL_KIND_LABEL[kind]}</Badge>
-                    <h2 className="truncate font-semibold">{material.title}</h2>
-                    {state.tone === "done" && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />}
+                <button type="button" aria-expanded={isExpanded(material.id)} aria-controls={`material-panel-${material.id}`} onClick={() => setExpandedIds(current => { const next = new Set(current ?? (defaultMaterialId ? [defaultMaterialId] : [])); if (next.has(material.id)) next.delete(material.id); else next.add(material.id); return next; })} className="flex min-w-0 flex-1 items-start gap-3 text-left">
+                  <span aria-hidden="true" className="mt-1 text-slate-400">{isExpanded(material.id) ? "▾" : "▸"}</span><div className="min-w-0">
+                    <div className="flex items-center gap-2"><Badge variant="secondary">{MATERIAL_KIND_LABEL[kind]}</Badge><h2 className="truncate font-semibold">{material.title}</h2>{state.tone === "done" && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />}</div>
+                    {material.description && <p className="mt-1.5 text-sm text-slate-500">{material.description}</p>}
                   </div>
-                  {material.description && <p className="mt-1.5 text-sm text-slate-500">{material.description}</p>}
-                </div>
-                <div className="flex items-center gap-3">
-                  {kind !== "practice" && <span className="w-24 shrink-0 text-right text-xs text-slate-500">{state.label}</span>}
-                  {material.sourceUrl && <a href={material.sourceUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-violet-700 hover:underline">原始来源</a>}
-                </div>
+                </button>
+                <div className="flex items-center gap-3">{kind !== "practice" && <span className="w-24 shrink-0 text-right text-xs text-slate-500">{state.label}</span>}{material.sourceUrl && <a href={material.sourceUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-violet-700 hover:underline">原始来源</a>}</div>
               </header>
 
-              <div className="p-5">
-                {kind === "video" && url && isActive && <VideoPlayer
+              {isExpanded(material.id) && <div id={`material-panel-${material.id}`} role="region" className="p-5">
+                {kind === "video" && url && <VideoPlayer
                   materialId={material.id}
                   src={url}
                   title={material.title}
-                  comments={comments.filter(item => item.comment.materialId === material.id)}
+                  comments={localComments.filter(item => item.comment.materialId === material.id)}
                   resumeSecond={row?.position && row.percent < 100 ? row.position : null}
                   onProgress={payload => reportProgress(material, payload)}
+                  onCommentAdded={appendComment}
                 />}
-                {kind === "video" && url && !isActive && <button onClick={() => { setActiveId(material.id); beginMaterial(material.id); }} className="flex aspect-video w-full items-center justify-center gap-3 rounded-xl bg-slate-950 text-sm font-semibold text-white transition hover:bg-slate-900"><PlayCircle className="h-8 w-8 text-violet-300" />{row?.position && row.percent < 100 ? `从 ${formatClock(row.position)} 继续观看` : "播放视频"}</button>}
                 {kind === "video" && !url && <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-500">视频文件正在维护。</p>}
-
-                {kind === "pdf" && url && <PdfReader
-                  materialId={material.id}
-                  src={url}
-                  annotations={annotations.filter(item => item.materialId === material.id)}
-                  resumePage={row?.position && row.percent < 100 ? row.position : null}
-                  onProgress={payload => reportProgress(material, { position: payload.page, percent: clampPercent(payload.page / payload.totalPages * 100) })}
-                />}
-
+                {kind === "pdf" && url && <PdfReader materialId={material.id} src={url} annotations={annotations.filter(item => item.materialId === material.id)} resumePage={row?.position && row.percent < 100 ? row.position : null} onProgress={payload => reportProgress(material, { position: payload.page, percent: clampPercent(payload.page / payload.totalPages * 100) })} />}
                 {kind === "document" && (() => {
-                  const display = resolveDocumentDisplay({ content: material.content, mimeType: material.mimeType, url });
+                  const contentHtml = material.contentHtml || (typeof material.config.contentHtml === "string" ? material.config.contentHtml : null);
+                  const contentFormat = material.contentFormat || (typeof material.config.contentFormat === "string" ? material.config.contentFormat : null);
+                  const display = resolveDocumentDisplay({ content: material.content, contentHtml, contentFormat, mimeType: material.mimeType, url });
+                  if (display === "html" && contentHtml) return <HtmlReader html={contentHtml} title={material.title} sourceUrl={material.canonicalUrl || material.sourceUrl} onProgress={percent => reportProgress(material, { position: 0, percent })} />;
                   if (display === "markdown") return <DocReader content={material.content || ""} title={material.title} onProgress={percent => reportProgress(material, { position: 0, percent })} />;
                   if (display === "image" && url) return <img className="max-h-[620px] w-full rounded-xl border border-slate-200 object-contain" src={url} alt={material.title} />;
                   if (display === "link" && url) return <a href={url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl bg-violet-50 px-4 py-3 text-sm font-medium text-violet-800">打开或下载文档 <ExternalLink className="h-4 w-4" /></a>;
                   return <p className="rounded-xl bg-slate-50 p-5 text-sm text-amber-700">文档内容正在维护。</p>;
                 })()}
-
                 {kind === "practice" && <PracticePanel material={material} runs={(experience?.runs ?? []).filter(item => item.materialId === material.id)} />}
-              </div>
+              </div>}
             </section>;
           })}
 
           {/* 课程讨论区（挂在课程级，素材为空也可交流） */}
           <div className="mt-6">{materials?.length
-            ? <DiscussionPanel materialId={activeMaterial?.id ?? materials[0].id} comments={comments} placeholder="关于这门课的任何问题、心得或补充材料" />
+            ? <DiscussionPanel materialId={activeMaterial?.id ?? materials[0].id} comments={localComments} placeholder="关于这门课的任何问题、心得或补充材料" />
             : null}</div>
 
           {/* 上一课/下一课 */}
@@ -199,7 +205,7 @@ export default function CourseDetail() {
                 const row = progressByMaterial.get(material.id);
                 const state = progressState(row?.percent ?? 0);
                 const isActive = activeMaterial?.id === material.id;
-                return <button key={material.id} onClick={() => { setActiveId(material.id); beginMaterial(material.id); if (kind === "video" || kind === "pdf") document.querySelector(`[data-material="${material.id}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" }); }} className={cn("flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left transition", isActive ? "border-violet-300 bg-violet-50/70" : "border-transparent hover:bg-slate-50")}>
+                return <button key={material.id} onClick={() => selectMaterial(material.id)} className={cn("flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left transition", isActive ? "border-violet-300 bg-violet-50/70" : "border-transparent hover:bg-slate-50")} aria-current={isActive ? "step" : undefined}>
                   <span className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-bold", state.tone === "done" ? "bg-emerald-100 text-emerald-600" : isActive ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-500")}>{state.tone === "done" ? <CheckCircle2 className="h-3.5 w-3.5" /> : index + 1}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-semibold text-slate-800">{material.title}</span>
@@ -211,14 +217,6 @@ export default function CourseDetail() {
               {!materials?.length && <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-500">本课暂无结构化素材。</p>}
             </div>
 
-            {materials && materials.length > 0 && (
-              <Button
-                variant={courseState.tone === "done" ? "outline" : "default"}
-                disabled={saveProgress.isPending || courseState.tone === "done"}
-                onClick={() => { const material = activeMaterial ?? materials[0]; reportProgress(material, { position: 0, percent: 100 }); toast.success("已手动标记为完成"); }}
-                className="mt-4 w-full rounded-lg"
-              >{courseState.tone === "done" ? <><CheckCircle2 className="mr-2 h-4 w-4 text-emerald-500" />已完成</> : "手动标记为完成"}</Button>
-            )}
             {annotations.length > 0 && <p className="mt-3 flex items-center gap-1.5 border-t border-slate-100 pt-3 text-[11px] text-slate-500"><Highlighter className="h-3.5 w-3.5 text-violet-500" />已有 {annotations.length} 条 PDF 标注</p>}
           </div>
 

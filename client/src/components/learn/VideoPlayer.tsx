@@ -1,6 +1,5 @@
 // 自定义视频学习播放器：倍速、快捷键、进度时间戳标记、轨道化弹幕层与断点续播。
 // 原生 controls 关闭，播放/进度/音量统一由本组件托管。
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
@@ -19,14 +18,19 @@ export type VideoPlayerProps = {
   resumeSecond: number | null;
   // watchedSeconds 为本次会话累计观看秒数（正向播放），用于学习分钟数增量统计。
   onProgress: (payload: { position: number; percent: number; watchedSeconds: number }) => void;
+  // 成功后由课程页局部追加，避免重新加载整个课程体验并打断视频状态。
+  onCommentAdded?: (comment: CommentRow) => void;
 };
 
-export default function VideoPlayer({ materialId, src, title, comments, resumeSecond, onProgress }: VideoPlayerProps) {
+export default function VideoPlayer({ materialId, src, title, comments, resumeSecond, onProgress, onCommentAdded }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(resumeSecond ?? 0);
   const [duration, setDuration] = useState(0);
+  const currentTimeRef = useRef(resumeSecond ?? 0);
+  const lastVisualUpdateRef = useRef(0);
+  const visualTimerRef = useRef<number | null>(null);
   const [buffered, setBuffered] = useState(0);
   const [speed, setSpeed] = useState<number>(1);
   const [muted, setMuted] = useState(false);
@@ -38,10 +42,38 @@ export default function VideoPlayer({ materialId, src, title, comments, resumeSe
   const watchedRef = useRef({ seconds: 0, last: 0 });
   const resumeAppliedRef = useRef(false);
   const autoSaveRef = useRef({ at: 0, position: 0, duration: 0 });
+  // 父组件（CourseDetail）每次渲染都会传入新的 inline onProgress 闭包；若把它的身份当依赖，
+  // “保存进度”的 effect 会随父渲染反复重建，cleanup 里的 saveNow 再次触发 mutation，
+  // 形成“上报 → mutation 状态更新 → 父重渲染 → effect 重建再上报”的更新风暴
+  // （Maximum update depth exceeded）。因此经 ref 转发最新回调与时长，report 保持稳定身份。
+  const onProgressRef = useRef(onProgress);
+  const durationRef = useRef(duration);
+  useEffect(() => { onProgressRef.current = onProgress; durationRef.current = duration; });
 
-  const utils = trpc.useUtils();
+  // 播放时间需要保持精确用于进度上报，但弹幕视觉层不必跟随每个 timeupdate 重渲染。
+  // 约 120ms 刷新一次 React 状态，动画位置交给 transform 合成层处理。
+  const syncVisualTime = useCallback((next: number, immediate = false) => {
+    currentTimeRef.current = next;
+    const now = performance.now();
+    if (immediate || now - lastVisualUpdateRef.current >= 120) {
+      if (visualTimerRef.current !== null) window.clearTimeout(visualTimerRef.current);
+      visualTimerRef.current = null;
+      lastVisualUpdateRef.current = now;
+      setCurrent(next);
+      return;
+    }
+    if (visualTimerRef.current === null) {
+      visualTimerRef.current = window.setTimeout(() => {
+        visualTimerRef.current = null;
+        lastVisualUpdateRef.current = performance.now();
+        setCurrent(currentTimeRef.current);
+      }, Math.max(0, 120 - (now - lastVisualUpdateRef.current)));
+    }
+  }, []);
+  useEffect(() => () => { if (visualTimerRef.current !== null) window.clearTimeout(visualTimerRef.current); }, []);
+
   const addComment = trpc.platform.learning.addComment.useMutation({
-    onSuccess: () => { setDraft(""); utils.platform.learning.courseExperience.invalidate(); },
+    onSuccess: result => { setDraft(""); onCommentAdded?.(result); },
   });
 
   const danmakuItems = useMemo<DanmakuItem[]>(() => comments
@@ -54,9 +86,10 @@ export default function VideoPlayer({ materialId, src, title, comments, resumeSe
   const showFlash = useCallback((text: string) => { setFlash(text); window.setTimeout(() => setFlash(null), 900); }, []);
 
   // 统一进度上报：percent 按观看比例换算，看完 92% 记为 100。
+  // 回调与时长经 ref 读取，依赖为空以保持身份稳定（见 onProgressRef 注释）。
   const report = useCallback((position: number, percent?: number) => {
-    onProgress({ position, percent: percent ?? videoPercent(position, duration), watchedSeconds: watchedRef.current.seconds });
-  }, [duration, onProgress]);
+    onProgressRef.current({ position, percent: percent ?? videoPercent(position, durationRef.current), watchedSeconds: watchedRef.current.seconds });
+  }, []);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current; if (!video) return;
@@ -99,7 +132,7 @@ export default function VideoPlayer({ materialId, src, title, comments, resumeSe
     // 只累计正向播放的时长，倍速不影响“观看分钟数”统计口径。
     watchedRef.current.seconds += Math.max(0, Math.min(1, now - watchedRef.current.last));
     watchedRef.current.last = now;
-    setCurrent(now);
+    syncVisualTime(now);
     if (video.buffered.length) setBuffered(video.buffered.end(video.buffered.length - 1));
     // 每 20 秒自动保存一次播放位置，关闭或刷新页面也能续播。
     if (duration > 0 && Date.now() - autoSaveRef.current.at > 20_000) {
@@ -122,7 +155,6 @@ export default function VideoPlayer({ materialId, src, title, comments, resumeSe
       window.removeEventListener("pagehide", saveNow);
       saveNow();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [report]);
 
   const progressPercent = duration ? Math.min(100, (scrubbing ?? current) / duration * 100) : 0;
@@ -146,11 +178,12 @@ export default function VideoPlayer({ materialId, src, title, comments, resumeSe
           }
           resumeAppliedRef.current = true;
           watchedRef.current.last = video.currentTime;
+          syncVisualTime(video.currentTime, true);
         }}
         onTimeUpdate={handleTimeUpdate}
         onPlay={() => setPlaying(true)}
-        onPause={() => { setPlaying(false); report(videoRef.current?.currentTime ?? 0); }}
-        onEnded={() => { setPlaying(false); report(duration, 100); }}
+        onPause={() => { syncVisualTime(videoRef.current?.currentTime ?? currentTimeRef.current, true); setPlaying(false); report(videoRef.current?.currentTime ?? currentTimeRef.current); }}
+        onEnded={() => { const position = videoRef.current?.duration ?? durationRef.current; syncVisualTime(position, true); setPlaying(false); report(position, 100); }}
       />
 
       {/* 弹幕层：每条弹幕在自己的轨道上从右向左平移，生命周期 8 秒 */}
@@ -160,8 +193,8 @@ export default function VideoPlayer({ materialId, src, title, comments, resumeSe
           const progress = Math.min(1, elapsed / 8);
           return <div
             key={lane.item.id}
-            className="absolute whitespace-nowrap text-sm font-medium text-white drop-shadow-[0_1px_3px_rgba(0,0,0,.9)]"
-            style={{ top: `calc(${8 + lane.track * 11}% )`, right: `${-30 + progress * 130}%`, opacity: progress > 0.85 ? (1 - progress) / 0.15 : 1 }}
+            className="pointer-events-none absolute whitespace-nowrap text-sm font-medium text-white [contain:layout_paint]"
+            style={{ top: `calc(${8 + lane.track * 11}% )`, left: "100%", transform: `translate3d(${130 - progress * 230}%, 0, 0)`, opacity: progress > 0.85 ? (1 - progress) / 0.15 : 1, willChange: "transform, opacity", textShadow: "0 1px 3px rgb(0 0 0 / 0.9)" }}
           >{lane.item.content}</div>;
         })}
       </div>
@@ -205,23 +238,26 @@ export default function VideoPlayer({ materialId, src, title, comments, resumeSe
       </div>
     </div>
 
-    {/* 弹幕发送框 */}
-    <div className="border-t border-white/10 bg-slate-950 p-4">
-      <div className="flex items-center gap-2">
-        <Badge className="border-violet-400/40 bg-violet-500/15 text-violet-200 hover:bg-violet-500/15">弹幕</Badge>
-        <span className="text-xs text-slate-400">{asDanmaku ? `将作为弹幕在 ${formatClock(current)} 处飞过` : "将作为时间戳评论记录"} · 已有 {comments.length} 条互动</span>
-      </div>
-      <div className="mt-2 flex gap-2">
-        <Textarea value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && draft.trim()) addComment.mutate({ materialId, content: draft.trim(), videoSecond: Math.floor(current), isDanmaku: asDanmaku }); }} placeholder="发一条弹幕，或记录此刻的笔记（Ctrl+Enter 发送）" className="min-h-10 border-white/15 bg-white/10 text-white placeholder:text-slate-500" />
-        <div className="flex flex-col gap-2">
-          <Button disabled={!draft.trim() || addComment.isPending} onClick={() => addComment.mutate({ materialId, content: draft.trim(), videoSecond: Math.floor(current), isDanmaku: asDanmaku })} className="bg-violet-500 hover:bg-violet-400">{addComment.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button>
-          <button onClick={() => setAsDanmaku(value => !value)} className={cn("rounded-md border px-2 py-1 text-[11px] font-semibold transition", asDanmaku ? "border-violet-400/60 bg-violet-500/20 text-violet-200" : "border-white/15 text-slate-400")}>{asDanmaku ? "弹幕模式" : "笔记模式"}</button>
+    {/* 弹幕输入：发布模式、当前时间与发送动作分层，避免在播放时误触播放器控制。 */}
+    <div className="border-t border-white/10 bg-slate-950 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-white">记录这一刻</span>
+          <span className="rounded-full bg-white/10 px-2 py-1 font-mono text-[11px] text-violet-200">{formatClock(current)}</span>
+        </div>
+        <div className="inline-flex rounded-lg border border-white/10 bg-white/5 p-1" role="group" aria-label="发布类型">
+          <button type="button" onClick={() => setAsDanmaku(true)} aria-pressed={asDanmaku} className={cn("rounded-md px-3 py-1.5 text-xs font-semibold transition", asDanmaku ? "bg-violet-500 text-white" : "text-slate-400 hover:text-white")}>弹幕</button>
+          <button type="button" onClick={() => setAsDanmaku(false)} aria-pressed={!asDanmaku} className={cn("rounded-md px-3 py-1.5 text-xs font-semibold transition", !asDanmaku ? "bg-white/15 text-white" : "text-slate-400 hover:text-white")}>时间戳笔记</button>
         </div>
       </div>
-      {comments.length > 0 && <div className="mt-3 max-h-40 space-y-1.5 overflow-y-auto pr-1">
-        {comments.slice(-8).reverse().map(item => <p key={item.comment.id} className="flex items-start gap-2 text-xs text-slate-300"><MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-400" /><span>{item.comment.videoSecond !== null && <span className="mr-1.5 font-mono text-violet-300">{formatClock(item.comment.videoSecond)}</span>}{item.comment.content}<span className="ml-1.5 text-slate-500">— {item.authorName || "员工"}</span></span></p>)}
-      </div>}
-      <p className="mt-2 text-[11px] text-slate-500">快捷键：空格/K 播放暂停 · ←→ 5 秒 · J/L 10 秒 · 当前播放「{title}」</p>
+      <div className="mt-3 rounded-xl border border-white/15 bg-white/5 p-2 transition focus-within:border-violet-400/70 focus-within:ring-2 focus-within:ring-violet-500/20">
+        <Textarea value={draft} maxLength={500} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && draft.trim()) { event.preventDefault(); addComment.mutate({ materialId, content: draft.trim(), videoSecond: Math.floor(currentTimeRef.current), isDanmaku: asDanmaku }); } }} placeholder={asDanmaku ? "写下此刻的想法，它会在视频中飘过…" : "记录一个带时间戳的学习笔记…"} className="min-h-16 resize-none border-0 bg-transparent p-2 text-white placeholder:text-slate-500 focus-visible:ring-0" />
+        <div className="flex items-center justify-between gap-2 border-t border-white/10 px-2 pt-2">
+          <span className="text-[11px] text-slate-500">Ctrl / ⌘ + Enter 发送 · {draft.length}/500</span>
+          <Button disabled={!draft.trim() || addComment.isPending} onClick={() => addComment.mutate({ materialId, content: draft.trim(), videoSecond: Math.floor(currentTimeRef.current), isDanmaku: asDanmaku })} className="h-10 rounded-lg bg-violet-500 px-4 text-xs font-semibold text-white hover:bg-violet-400">{addComment.isPending ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />发送中</> : <><Send className="mr-1.5 h-3.5 w-3.5" />发送</>}</Button>
+        </div>
+      </div>
+      {comments.length > 0 && <div className="mt-4 border-t border-white/10 pt-3"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-semibold text-slate-300">最近记录</span><span className="text-[11px] text-slate-500">{comments.length} 条互动</span></div><div className="max-h-36 space-y-2 overflow-y-auto pr-1">{comments.slice(-8).reverse().map(item => <p key={item.comment.id} className="flex items-start gap-2 text-xs leading-5 text-slate-300"><MessageCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-400" /><span>{item.comment.videoSecond !== null && <span className="mr-1.5 rounded bg-violet-500/15 px-1 py-0.5 font-mono text-[10px] text-violet-300">{formatClock(item.comment.videoSecond)}</span>}{item.comment.content}<span className="ml-1.5 text-slate-500">— {item.authorName || "员工"}</span></span></p>)}</div></div>}
     </div>
   </div>;
 }

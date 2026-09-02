@@ -80,7 +80,7 @@ export function collectPageContext(route: string, utils: ReturnType<typeof trpc.
     const detail = utils.platform.community.detail.getData({ postId: id });
     if (detail) {
       context.title = detail.post.title;
-      context.excerpt = `${detail.post.title}\n\n${clamp(detail.post.content, 8_000)}\n\n评论：${detail.comments.map(item => `${item.authorName || "员工"}：${clamp(item.comment.content, 200)}`).join("；")}`;
+      context.excerpt = `${detail.post.title}\n\n${clamp(detail.markdown, 8_000)}\n\n评论：${detail.comments.map(item => `${item.authorName || "员工"}：${clamp(item.comment.content, 200)}`).join("；")}`;
     }
   } else if (kind === "skillsHub") {
     const skills = utils.platform.skills.list.getData();

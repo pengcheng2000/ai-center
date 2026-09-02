@@ -17,12 +17,17 @@ export default function DocReader({ content, title, onProgress }: DocReaderProps
   const hostRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastReportRef = useRef(-1);
+  // 父组件每次渲染都会传入新的 inline onProgress；经 ref 转发，避免滚动测量 effect
+  // 随回调身份反复重建（重建即重复 measure 并可能重复上报进度，参见 VideoPlayer 的同类注释）。
+  const onProgressRef = useRef(onProgress);
+  useEffect(() => { onProgressRef.current = onProgress; });
   const [percent, setPercent] = useState(0);
   const [immersive, setImmersive] = useState(false);
   const [fontStep, setFontStep] = useState(1);
   const [chromeVisible, setChromeVisible] = useState(true);
 
   // 滚动深度 = 已滚过高度 / 可滚动总高度；内容不足一屏视为 100%。
+  // 依赖为空：宿主节点与回调都经 ref 读取，effect 只在挂载时建立一次测量。
   useEffect(() => {
     const host = hostRef.current; if (!host) return;
     const measure = () => {
@@ -31,12 +36,12 @@ export default function DocReader({ content, title, onProgress }: DocReaderProps
       setPercent(value);
       // 每 20% 上报一次，避免拖动滚动条时打爆接口。
       const bucket = Math.round(value / 20) * 20;
-      if (bucket > lastReportRef.current) { lastReportRef.current = bucket; onProgress(bucket); }
+      if (bucket > lastReportRef.current) { lastReportRef.current = bucket; onProgressRef.current(bucket); }
     };
     measure();
     host.addEventListener("scroll", measure, { passive: true });
     return () => host.removeEventListener("scroll", measure);
-  }, [onProgress]);
+  }, []);
 
   // 沉浸模式：优先系统全屏；滚动时自动隐藏顶栏。
   const toggleImmersive = useCallback(async () => {

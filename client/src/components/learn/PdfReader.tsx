@@ -3,10 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { ANNOTATION_COLOR_CLASSES, pdfPercent } from "@/lib/learnExperience";
+import { ANNOTATION_COLOR_CLASSES, defaultPdfDisplayMode, pdfPercent, pdfReadingProfile, type PdfReadingProfile } from "@/lib/learnExperience";
 import { cn } from "@/lib/utils";
 import {
-  BookOpenText, ChevronDown, ChevronUp, Highlighter, Loader2,
+  BookOpenText, ChevronLeft, ChevronRight, Highlighter, Loader2,
   Maximize2, Minimize2, Minus, MousePointer2, Plus, Rows3, Square, StickyNote, Trash2, X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,31 +23,47 @@ export type PdfReaderProps = {
 
 type DraftRect = { x: number; y: number; w: number; h: number };
 type PdfDoc = { numPages: number; getPage: (page: number) => Promise<PdfPage> };
-type PdfPage = { getViewport: (options: { scale: number }) => { width: number; height: number }; render: (options: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => { promise: Promise<void> } };
+type PdfRenderTask = { promise: Promise<void>; cancel?: () => void };
+type PdfPage = { getViewport: (options: { scale: number }) => { width: number; height: number }; render: (options: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => PdfRenderTask };
 
 const DPR = Math.min(2, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
+const MIN_PDF_SCALE = 0.25;
 
 // ---------- 单页画布：负责一页的渲染（含高分屏倍频） ----------
-function PageCanvas({ doc, page, scale, onRendered }: { doc: PdfDoc; page: number; scale: number; onRendered?: () => void }) {
+function PageCanvas({ doc, page, scale, onRendered, onError }: { doc: PdfDoc; page: number; scale: number; onRendered?: () => void; onError?: (error: unknown) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const onRenderedRef = useRef(onRendered);
+  const onErrorRef = useRef(onError);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => { onRenderedRef.current = onRendered; onErrorRef.current = onError; });
   useEffect(() => {
     let cancelled = false;
+    let renderTask: PdfRenderTask | null = null;
+    setSize(null);
     (async () => {
-      const pdfPage = await doc.getPage(page);
-      if (cancelled) return;
-      const viewport = pdfPage.getViewport({ scale });
-      const canvas = canvasRef.current;
-      const context = canvas?.getContext("2d");
-      if (!canvas || !context) return;
-      canvas.width = viewport.width * DPR; canvas.height = viewport.height * DPR;
-      canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
-      setSize({ w: viewport.width, h: viewport.height });
-      await pdfPage.render({ canvasContext: context, viewport }).promise;
-      if (!cancelled) onRendered?.();
+      try {
+        const pdfPage = await doc.getPage(page);
+        if (cancelled) return;
+        const viewport = pdfPage.getViewport({ scale });
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext("2d");
+        if (!canvas || !context || cancelled) {
+          if (!cancelled) onErrorRef.current?.(new Error(`第 ${page} 页画布初始化失败`));
+          return;
+        }
+        canvas.width = Math.ceil(viewport.width * DPR); canvas.height = Math.ceil(viewport.height * DPR);
+        canvas.style.width = `${viewport.width}px`; canvas.style.height = `${viewport.height}px`;
+        context.setTransform(DPR, 0, 0, DPR, 0, 0);
+        setSize({ w: viewport.width, h: viewport.height });
+        renderTask = pdfPage.render({ canvasContext: context, viewport });
+        await renderTask.promise;
+        if (!cancelled) onRenderedRef.current?.();
+      } catch (renderError) {
+        if (!cancelled && (renderError as { name?: string }).name !== "RenderingCancelledException") onErrorRef.current?.(renderError);
+      }
     })();
-    return () => { cancelled = true; };
-  }, [doc, page, scale, onRendered]);
+    return () => { cancelled = true; renderTask?.cancel?.(); };
+  }, [doc, page, scale]);
   return <canvas ref={canvasRef} className="block rounded-lg shadow-2xl shadow-black/40" style={{ width: size?.w, height: size?.h, visibility: size ? "visible" : "hidden" }} />;
 }
 
@@ -57,12 +73,19 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
   const viewerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const progressRef = useRef(0);
+  // 父组件每次渲染都会传入新的 inline onProgress；经 ref 转发保持 reportPage 身份稳定，
+  // 避免键盘翻页监听与 IntersectionObserver effect 随父渲染反复销毁重建（参见 VideoPlayer 的同类注释）。
+  const onProgressRef = useRef(onProgress);
+  useEffect(() => { onProgressRef.current = onProgress; });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(resumePage ?? 1);
   const [totalPages, setTotalPages] = useState(0);
   const [scale, setScale] = useState(1.25);
+  const [firstPageSize, setFirstPageSize] = useState<{ w: number; h: number } | null>(null);
+  const initialFitPendingRef = useRef(true);
   const [mode, setMode] = useState<"page" | "scroll">("scroll");
+  const [profile, setProfile] = useState<PdfReadingProfile>("document");
   const [immersive, setImmersive] = useState(false);
   const [toolbarVisible, setToolbarVisible] = useState(true);
   const [annotateMode, setAnnotateMode] = useState(false);
@@ -81,12 +104,15 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
     if (next === progressRef.current || total <= 0 || next < 1 || next > total) return;
     progressRef.current = next;
     setPage(next);
-    onProgress({ page: next, totalPages: total });
-  }, [onProgress]);
+    onProgressRef.current({ page: next, totalPages: total });
+  }, []);
 
   // 加载文档；scale 初次按阅读区宽度自适应（fit-width，留 48px 呼吸边距）。
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
+    setError(null);
+    setProfile("document");
     (async () => {
       try {
         const pdfjs = await import("pdfjs-dist");
@@ -95,10 +121,21 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
         if (cancelled) { void (doc as unknown as { destroy?: () => Promise<void> }).destroy?.(); return; }
         docRef.current = doc;
         setTotalPages(doc.numPages);
-        const width = viewerRef.current?.clientWidth ?? 800;
         const first = await doc.getPage(1);
-        const fit = (width - 48) / first.getViewport({ scale: 1 }).width;
-        setScale(Math.max(0.5, Math.min(2.5, fit)));
+        const firstViewport = first.getViewport({ scale: 1 });
+        setFirstPageSize({ w: firstViewport.width, h: firstViewport.height });
+        const width = viewerRef.current?.clientWidth || 800;
+        const height = viewerRef.current?.clientHeight || 640;
+        const nextProfile = pdfReadingProfile(firstViewport.width, firstViewport.height);
+        const availableWidth = Math.max(320, width - 48);
+        const availableHeight = Math.max(240, height - 48);
+        const fit = nextProfile === "presentation"
+          ? Math.min(availableWidth / firstViewport.width, availableHeight / firstViewport.height)
+          : availableWidth / firstViewport.width;
+        setProfile(nextProfile);
+        setMode(defaultPdfDisplayMode(doc.numPages, nextProfile));
+        initialFitPendingRef.current = true;
+        setScale(Math.max(MIN_PDF_SCALE, Math.min(2.5, fit)));
         setReady(true);
         reportPage(resumePage && resumePage >= 1 && resumePage <= doc.numPages ? resumePage : 1, doc.numPages);
       } catch (loadError) {
@@ -108,6 +145,48 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
     return () => { cancelled = true; const doc = docRef.current as unknown as { destroy?: () => Promise<void> } | null; void doc?.destroy?.(); docRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);
+
+  // 首次布局可能尚未得到 viewer 高度；等容器稳定后只修正一次 fit-page 初始值。
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!ready || !viewer || !firstPageSize || !initialFitPendingRef.current) return;
+    const updateInitialFit = () => {
+      if (!initialFitPendingRef.current || viewer.clientWidth <= 0) return;
+      const width = Math.max(320, viewer.clientWidth - 48);
+      const height = Math.max(240, viewer.clientHeight - 48);
+      const fit = profile === "presentation"
+        ? Math.min(width / firstPageSize.w, height / firstPageSize.h)
+        : width / firstPageSize.w;
+      setScale(Math.max(MIN_PDF_SCALE, Math.min(2.5, fit)));
+      initialFitPendingRef.current = false;
+    };
+    updateInitialFit();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateInitialFit) : null;
+    observer?.observe(viewer);
+    return () => observer?.disconnect();
+  }, [ready, firstPageSize, profile]);
+
+  // 按当前阅读区尺寸计算 fit scale；只在布局变化触发，不影响用户手动缩放。
+  const fitScaleToViewer = useCallback(() => {
+    const viewer = viewerRef.current;
+    if (!viewer || !firstPageSize || viewer.clientWidth <= 0) return;
+    const width = Math.max(320, viewer.clientWidth - 48);
+    const height = Math.max(240, viewer.clientHeight - 48);
+    const fit = profile === "presentation"
+      ? Math.min(width / firstPageSize.w, height / firstPageSize.h)
+      : width / firstPageSize.w;
+    setScale(Math.max(MIN_PDF_SCALE, Math.min(2.5, fit)));
+  }, [firstPageSize, profile]);
+
+  // fullscreen 的尺寸更新发生在状态提交之后；等待两帧让 flex/fixed 布局完成。
+  const fitAfterLayout = useCallback(() => {
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => fitScaleToViewer());
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [fitScaleToViewer]);
+
+  useEffect(() => fitAfterLayout(), [immersive, fitAfterLayout]);
 
   // 沉浸模式：优先系统全屏，失败（如被拒绝）退化为页面内固定层。
   const toggleImmersive = useCallback(async () => {
@@ -122,10 +201,15 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
   }, [immersive]);
 
   useEffect(() => {
-    const onFullscreenChange = () => { if (!document.fullscreenElement) setImmersive(false); };
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setImmersive(false);
+        void fitAfterLayout();
+      }
+    };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
-  }, []);
+  }, [fitAfterLayout]);
 
   // 沉浸模式下鼠标静止 2.5s 自动隐藏工具栏。
   useEffect(() => {
@@ -154,7 +238,7 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
       if (event.key === "ArrowRight" || event.key === "PageDown") goTo(page + 1, true);
       else if (event.key === "ArrowLeft" || event.key === "PageUp") goTo(page - 1, true);
       else if (event.key === "+" || event.key === "=") setScale(value => Math.min(2.5, value + 0.15));
-      else if (event.key === "-") setScale(value => Math.max(0.5, value - 0.15));
+      else if (event.key === "-") setScale(value => Math.max(MIN_PDF_SCALE, value - 0.15));
       else if (event.key.toLowerCase() === "f") void toggleImmersive();
       else if (event.key.toLowerCase() === "a") setAnnotateMode(value => !value);
     };
@@ -207,8 +291,13 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
   }, [annotations]);
   const pageAnnotations = annotationsByPage.get(page) ?? [];
 
-  // 每一页的渲染节点（单页与连续模式复用），含标注覆盖层。
-  const renderPageNode = (pageNumber: number) => {
+  // 连续模式只挂载当前页附近的真实 canvas，其余页面保留稳定占位高度。
+  const scrollWindow = useMemo(() => {
+    const radius = 2;
+    return new Set(Array.from({ length: totalPages }, (_, index) => index + 1).filter(number => Math.abs(number - page) <= radius));
+  }, [page, totalPages]);
+
+  const renderPageNode = (pageNumber: number, renderCanvas = true) => {
     const doc = docRef.current; if (!doc) return null;
     const list = annotationsByPage.get(pageNumber) ?? [];
     return <div
@@ -220,7 +309,7 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
       onPointerMove={onPagePointerMove}
       onPointerUp={onPagePointerUp(pageNumber)}
     >
-      <PageCanvas doc={doc} page={pageNumber} scale={scale} />
+      {renderCanvas ? <PageCanvas doc={doc} page={pageNumber} scale={scale} onError={renderError => setError(renderError instanceof Error ? renderError.message : `第 ${pageNumber} 页渲染失败`)} /> : <div className="bg-white/10" style={{ width: firstPageSize ? `${firstPageSize.w * scale}px` : "800px", height: firstPageSize ? `${firstPageSize.h * scale}px` : "640px" }} aria-label={`第 ${pageNumber} 页占位`} />}
       <div className="pointer-events-none absolute -top-7 right-0 rounded-md bg-slate-900/70 px-2 py-0.5 text-[10px] font-semibold text-white">{pageNumber} / {totalPages}</div>
       {list.map(annotation => annotation.rects.map((rect, index) => <div
         key={`${annotation.id}-${index}`}
@@ -237,7 +326,7 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
   if (error) return <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">PDF 无法加载：{error}。可尝试刷新或联系内容负责人。</div>;
 
   const toolbar = <div className={cn("flex flex-wrap items-center gap-1.5 transition-all duration-300", immersive ? "pointer-events-auto rounded-xl border border-white/10 bg-slate-900/90 px-3 py-2 text-slate-200 shadow-2xl backdrop-blur" : "rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-slate-700 shadow-sm backdrop-blur")}>
-    <button onClick={() => goTo(page - 1, true)} disabled={page <= 1} aria-label="上一页" className={cn("grid h-8 w-8 place-items-center rounded-lg transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}><ChevronUp className="h-4 w-4" /></button>
+    <button onClick={() => goTo(page - 1, true)} disabled={page <= 1} aria-label="上一页" className={cn("grid h-8 w-8 place-items-center rounded-lg transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}><ChevronLeft className="h-4 w-4" /></button>
     <input
       value={page}
       onChange={event => { const value = Number(event.target.value); if (Number.isInteger(value) && value >= 1) goTo(value, true); }}
@@ -245,14 +334,15 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
       aria-label="页码"
     />
     <span className={cn("text-xs", immersive ? "text-slate-400" : "text-slate-500")}>/ {totalPages || "…"}</span>
-    <button onClick={() => goTo(page + 1, true)} disabled={page >= totalPages} aria-label="下一页" className={cn("grid h-8 w-8 place-items-center rounded-lg transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}><ChevronDown className="h-4 w-4" /></button>
+    {profile === "presentation" && <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-semibold", immersive ? "bg-white/10 text-slate-300" : "bg-slate-100 text-slate-500")}>演示文稿</span>}
+    <button onClick={() => goTo(page + 1, true)} disabled={page >= totalPages} aria-label="下一页" className={cn("grid h-8 w-8 place-items-center rounded-lg transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}><ChevronRight className="h-4 w-4" /></button>
     <span className={cn("mx-1 h-5 w-px", immersive ? "bg-white/15" : "bg-slate-200")} />
-    <button onClick={() => setScale(value => Math.max(0.5, value - 0.15))} aria-label="缩小" className={cn("grid h-8 w-8 place-items-center rounded-lg transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}><Minus className="h-4 w-4" /></button>
+    <button onClick={() => setScale(value => Math.max(MIN_PDF_SCALE, value - 0.15))} aria-label="缩小" className={cn("grid h-8 w-8 place-items-center rounded-lg transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}><Minus className="h-4 w-4" /></button>
     <span className="min-w-10 text-center font-mono text-xs tabular-nums">{Math.round(scale * 100)}%</span>
     <button onClick={() => setScale(value => Math.min(2.5, value + 0.15))} aria-label="放大" className={cn("grid h-8 w-8 place-items-center rounded-lg transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}><Plus className="h-4 w-4" /></button>
     <span className={cn("mx-1 h-5 w-px", immersive ? "bg-white/15" : "bg-slate-200")} />
-    <button onClick={() => setMode(value => value === "scroll" ? "page" : "scroll")} title={mode === "scroll" ? "切换到单页模式" : "切换到连续滚动"} className={cn("flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}>
-      {mode === "scroll" ? <><Square className="h-3.5 w-3.5" />单页</> : <><Rows3 className="h-3.5 w-3.5" />连续</>}
+    <button onClick={() => setMode(value => value === "scroll" ? "page" : "scroll")} title={mode === "scroll" ? "切换到单页阅读" : "切换到连续阅读（长文档按需渲染）"} className={cn("flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}>
+      {mode === "scroll" ? <><Square className="h-3.5 w-3.5" />单页阅读</> : <><Rows3 className="h-3.5 w-3.5" />连续阅读</>}
     </button>
     <button onClick={() => setAnnotateMode(value => !value)} title="标注模式（快捷键 A）" className={cn("flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition", annotateMode ? "bg-violet-600 text-white" : immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}>
       {annotateMode ? <Highlighter className="h-3.5 w-3.5" /> : <MousePointer2 className="h-3.5 w-3.5" />}{annotateMode ? "标注中" : "选择"}
@@ -272,7 +362,7 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
       <div ref={viewerRef} className={cn("min-h-0 flex-1 overflow-auto rounded-xl", immersive ? "bg-slate-950" : "border border-slate-200 bg-slate-200/60")} style={immersive ? undefined : { height: "min(72vh, 860px)" }}>
         <div className={cn("flex min-h-full flex-col gap-6 p-6", mode === "page" && "justify-start")}>
           {!ready && <div className="grid flex-1 place-items-center"><Loader2 className="h-6 w-6 animate-spin text-violet-400" /></div>}
-          {ready && mode === "scroll" && Array.from({ length: totalPages }, (_, index) => renderPageNode(index + 1))}
+          {ready && mode === "scroll" && Array.from({ length: totalPages }, (_, index) => { const pageNumber = index + 1; return renderPageNode(pageNumber, scrollWindow.has(pageNumber)); })}
           {ready && mode === "page" && renderPageNode(page)}
         </div>
       </div>

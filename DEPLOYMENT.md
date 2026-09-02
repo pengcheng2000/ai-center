@@ -2,8 +2,8 @@
 
 > **工程基线**：学习内容台账、三类课程资源、资讯时间线与聚合阅读信号、受管模型连接测试、企业应用中心、含互动和个人资产视图的 Skills 广场、外部 Agent 内容草稿导入，以及管理员批量直接导入 Skills 版本。  
 > **技术栈**：React 19、Vite 7、Express 4、tRPC 11、Drizzle ORM、MySQL/TiDB、Manus OAuth、对象存储与内置 AI 网关。  
-> **验证基线**：16 个测试文件、87 项测试与 TypeScript 类型检查通过。  
-> **数据库迁移**：`0000` 至 `0017_nasty_masque`。
+> **验证基线**：22 个测试文件、136 项测试与 TypeScript 类型检查通过。
+> **数据库迁移**：`0000` 至 `0025_loose_rafael_vega`。
 
 本工程包不包含 `node_modules/`、运行日志、构建产物、数据库数据或 `.env` 文件。原始模型密钥不写入业务表；供应商配置只保留受管密钥别名。
 
@@ -17,6 +17,7 @@
 | 构建 | `pnpm build` | 生成 `dist/`，且无构建错误。 |
 | 密钥 | 在部署平台配置全部必需变量 | 不提交 `.env`，不在日志打印密钥。 |
 | 管理员 | 核对 `OWNER_OPEN_ID` 或首位管理员角色 | 可进入运营管理页面。 |
+| 学习资源 | 核对 `courseMaterials` 与课程 ID 关联记录 | 课程页能看到结构化素材；无素材课程显示“暂无可学习资源”，不应误报复审状态。 |
 
 ## 2. 环境变量
 
@@ -46,7 +47,7 @@
 pnpm drizzle-kit migrate
 ```
 
-当前迁移包括学习内容生命周期、模型治理、审核责任链、社区主题/收藏、资源复审、每日同步状态、人工软删除、学习内容台账、`newsReadEvents` 去重阅读表、`courseMaterials`、`courseMaterialComments`、`coursePracticeRuns` 三类学习资源表、`llmProviders` 的受管网关状态字段、`enterpriseApps` 应用中心目录表、`skillPackages` 的员工投稿/审核责任/受控安装包元数据表、`skillReviews`、`skillDownloads` 的评分评论和个人下载资产表、`agentImportKeys`、`agentImportAssets`、`agentImportJobs` 的外部 Agent 令牌/受控媒体/草稿批次审计表，以及 `skillPackages.submissionSource/importBatchKey` 的管理员直接导入来源和批次追溯字段。对于已经运行旧版本的数据库，务必先备份，再执行迁移并确认 `__drizzle_migrations` 记录正常。
+当前迁移包括学习内容生命周期、模型治理、审核责任链、社区主题/收藏、资源复审、每日同步状态、人工软删除、学习内容台账、`newsReadEvents` 去重阅读表、`courseMaterials`、`courseMaterialComments`、`coursePracticeRuns` 三类学习资源表、`courseMaterials.contentHtml/contentFormat` 安全 HTML 快照字段、`llmProviders` 的受管网关状态字段、`enterpriseApps` 应用中心目录表、`skillPackages` 的员工投稿/审核责任/受控安装包元数据表、`skillReviews`、`skillDownloads` 的评分评论和个人下载资产表、`agentImportKeys`、`agentImportAssets`、`agentImportJobs` 的外部 Agent 令牌/受控媒体/草稿批次审计表，以及 `skillPackages.submissionSource/importBatchKey` 的管理员直接导入来源和批次追溯字段。对于已经运行旧版本的数据库，务必先备份，再执行迁移并确认 `__drizzle_migrations` 记录正常。
 
 修改 schema 的标准流程如下：
 
