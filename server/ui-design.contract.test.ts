@@ -7,12 +7,12 @@ const source = (path: string) => readFileSync(resolve(process.cwd(), path), "utf
 describe("calm product design contracts", () => {
   it("defines the coordinated neutral and domain palette", () => {
     const css = source("client/src/index.css");
-    expect(css).toContain("--background: #f6f6f3");
-    expect(css).toContain("--primary: #242624");
-    expect(css).toContain("--brand-learning: #596287");
-    expect(css).toContain("--brand-work: #835c4d");
-    expect(css).toContain("--brand-community: #3b7070");
-    expect(css).toContain("--brand-news: #4b7082");
+    expect(css).toContain("--background: #ffffff");
+    expect(css).toContain("--primary: #18181b");
+    expect(css).toContain("--brand-learning: #6366f1");
+    expect(css).toContain("--brand-work: #f97316");
+    expect(css).toContain("--brand-community: #10b981");
+    expect(css).toContain("--brand-news: #3b82f6");
     expect(css).toContain("prefers-reduced-motion: reduce");
   });
 
@@ -29,7 +29,7 @@ describe("calm product design contracts", () => {
     for (const label of ["工作台", "学习中心", "AI 资讯", "实践社区", "应用中心", "Skills 广场"]) {
       expect(shell).toContain(`label: "${label}"`);
     }
-    expect(shell).toContain("bg-[#fafaf8]/88");
+    expect(shell).toContain("bg-white/80");
     expect(shell).toContain("grid grid-cols-6");
     expect(shell).toContain("<BrandWordmark");
     expect(shell).not.toContain("NEXUS / AI ENABLEMENT");
@@ -44,30 +44,32 @@ describe("calm product design contracts", () => {
     expect(statSync(resolve(process.cwd(), "client/public/brand/chint-favicon.ico")).size).toBeGreaterThan(1_000);
   });
 
-  it("keeps rich domain panels and path-specific learning actions in the shared palette", () => {
+  it("uses compact page headers with domain colors instead of rich panels", () => {
     const css = source("client/src/index.css");
     const learning = source("client/src/lib/learnExperience.ts");
-    const applications = source("client/src/pages/ApplicationCenter.tsx");
     for (const panel of ["learning", "work", "community", "news", "skills"])
-      expect(css).toContain(`.rich-panel-${panel}`);
-    for (const color of ["#596287", "#835c4d", "#3b7070", "#4b7082", "#825f70"])
-      expect(learning).toContain(`button: "bg-[${color}]`);
-    expect(applications).toContain('<section className="rich-panel-work');
-    expect(applications).not.toContain('tone="work"');
+      expect(css).not.toContain(`.rich-panel-${panel}`);
+    for (const token of ["indigo-600", "orange-600", "emerald-600", "blue-600", "violet-600"])
+      expect(learning).toContain(`button: "bg-${token}`);
   });
 
-  it("uses the lighter blue-gray visual system for the AI assistant", () => {
+  it("uses a clean light visual system for the AI assistant", () => {
     const assistant = source("client/src/components/AIAssistantBall.tsx");
-    expect(assistant).toContain('from-[#e7eaf2]');
-    expect(assistant).toContain('from-[#687398] to-[#4b7082]');
+    expect(assistant).toContain('bg-white');
+    expect(assistant).toContain('text-blue-600');
     expect(assistant).not.toContain('gap-2.5 bg-slate-900');
   });
 
-  it("explains that daily RSS scheduling is unavailable in development instead of allowing a failing action", () => {
+  it("allows interval configuration but explains that scheduled execution is unavailable in development", () => {
     const operations = source("client/src/pages/Operations.tsx");
     expect(operations).toContain("const dailySyncConfigurationAvailable = !import.meta.env.DEV");
     expect(operations).toContain("!dailySyncConfigurationAvailable ||");
     expect(operations).toContain('开发预览环境不运行定时任务，发布后可启用');
-    expect(operations).toContain('? "发布后可启用"');
+    expect(operations).toContain('"频率可配置，发布后可启用"');
+    expect(operations).toContain("setSourceSyncInterval");
+    expect(operations).toContain("员工端定时摘要");
+    const newsCenter = source("client/src/pages/NewsCenter.tsx");
+    expect(newsCenter).toContain("data.newsDigest");
+    expect(newsCenter).toContain("员工端定时摘要");
   });
 });

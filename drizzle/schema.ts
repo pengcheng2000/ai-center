@@ -166,6 +166,7 @@ export const newsSources = mysqlTable("newsSources", {
   lastProcessedAt: timestamp("lastProcessedAt"),
   totalProcessed: int("totalProcessed").notNull().default(0),
   scheduleEnabled: int("scheduleEnabled").notNull().default(0),
+  syncIntervalHours: int("syncIntervalHours").notNull().default(24),
   scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
   scheduleLastRunAt: timestamp("scheduleLastRunAt"),
   scheduleLastError: text("scheduleLastError"),
@@ -173,9 +174,30 @@ export const newsSources = mysqlTable("newsSources", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, table => [index("news_sources_category_idx").on(table.category), index("news_sources_schedule_task_idx").on(table.scheduleCronTaskUid)]);
 
+// 员工端 AI 资讯首页的全局定时摘要配置。当前仅使用 id=1 的单例记录。
+export const newsDigestSettings = mysqlTable("newsDigestSettings", {
+  id: int("id").primaryKey(),
+  isEnabled: int("isEnabled").notNull().default(0),
+  intervalHours: int("intervalHours").notNull().default(24),
+  scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
+  lastRunAt: timestamp("lastRunAt"),
+  lastGeneratedAt: timestamp("lastGeneratedAt"),
+  lastError: text("lastError"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, table => [index("news_digest_settings_task_idx").on(table.scheduleCronTaskUid)]);
+
+export const newsDigests = mysqlTable("newsDigests", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 180 }).notNull(),
+  summary: text("summary").notNull(),
+  itemCount: int("itemCount").notNull().default(0),
+  generatedAt: timestamp("generatedAt").defaultNow().notNull(),
+}, table => [index("news_digests_generated_idx").on(table.generatedAt)]);
+
 export const newsItems = mysqlTable("newsItems", {
   id: int("id").autoincrement().primaryKey(),
   sourceId: int("sourceId").references(() => newsSources.id, { onDelete: "set null" }),
+  digestId: int("digestId").references(() => newsDigests.id, { onDelete: "set null" }),
   title: varchar("title", { length: 240 }).notNull(),
   summary: text("summary").notNull(),
   content: text("content"),
@@ -192,7 +214,7 @@ export const newsItems = mysqlTable("newsItems", {
   publishedAt: timestamp("publishedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, table => [index("news_items_status_idx").on(table.reviewStatus, table.category), index("news_items_deleted_idx").on(table.isDeleted, table.updatedAt)]);
+}, table => [index("news_items_status_idx").on(table.reviewStatus, table.category), index("news_items_deleted_idx").on(table.isDeleted, table.updatedAt), index("news_items_digest_idx").on(table.digestId)]);
 
 export const newsFavorites = mysqlTable("newsFavorites", {
   id: int("id").autoincrement().primaryKey(),

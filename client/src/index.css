@@ -40,117 +40,117 @@
 
 :root {
   color-scheme: light;
-  --radius: 0.625rem;
-  --background: #f6f6f3;
-  --foreground: #1d1e1c;
+  --radius: 0.75rem;
+  --background: #ffffff;
+  --foreground: #111827;
   --card: #ffffff;
-  --card-foreground: #1d1e1c;
+  --card-foreground: #111827;
   --popover: #ffffff;
-  --popover-foreground: #1d1e1c;
-  --primary: #242624;
-  --primary-foreground: #fbfbf9;
-  --secondary: #f0f1ee;
-  --secondary-foreground: #343734;
-  --muted: #f0f1ee;
-  --muted-foreground: #666a67;
-  --accent: #eceef3;
-  --accent-foreground: #4c5575;
-  --destructive: #a34f49;
-  --border: #e4e5e1;
-  --input: #dedfda;
-  --ring: #596287;
-  --brand-learning: #596287;
-  --brand-work: #835c4d;
-  --brand-community: #3b7070;
-  --brand-news: #4b7082;
-  --brand-chint: #237ae4;
-  --brand-berry: #825f70;
-  --surface-subtle: #f0f1ee;
-  --surface-elevated: rgba(255, 255, 255, 0.92);
-  --graphite: #242624;
-  --graphite-soft: #30332f;
-  --shadow-surface: 0 1px 2px rgba(27, 31, 27, 0.035), 0 8px 24px rgba(27, 31, 27, 0.035);
-  --shadow-hover: 0 2px 4px rgba(27, 31, 27, 0.04), 0 16px 36px rgba(27, 31, 27, 0.075);
-  --shadow-overlay: 0 24px 70px rgba(20, 23, 20, 0.2);
+  --popover-foreground: #111827;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #374151;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #eef2ff;
+  --accent-foreground: #4f46e5;
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #d1d5db;
+  --ring: #6366f1;
+  --brand-learning: #6366f1;
+  --brand-work: #f97316;
+  --brand-community: #10b981;
+  --brand-news: #3b82f6;
+  --brand-chint: #2563eb;
+  --brand-berry: #8b5cf6;
+  --surface-subtle: #f9fafb;
+  --surface-elevated: rgba(255, 255, 255, 0.95);
+  --graphite: #18181b;
+  --graphite-soft: #27272a;
+  --shadow-surface: none;
+  --shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-overlay: 0 24px 48px rgba(0, 0, 0, 0.12);
 
   /* Compatibility palette: existing utilities inherit the new product system. */
-  --color-slate-50: #f5f5f2;
-  --color-slate-100: #ecece8;
-  --color-slate-200: #dedfda;
-  --color-slate-300: #c8cbc5;
-  --color-slate-400: #929792;
-  --color-slate-500: #686d69;
-  --color-slate-600: #505551;
-  --color-slate-700: #3c403d;
-  --color-slate-800: #2b2e2b;
-  --color-slate-900: #242624;
-  --color-slate-950: #1a1c1a;
-  --color-violet-50: #f1f2f7;
-  --color-violet-100: #e5e7f0;
-  --color-violet-200: #cfd3e2;
-  --color-violet-300: #abb2c9;
-  --color-violet-400: #858eae;
-  --color-violet-500: #6e789d;
-  --color-violet-600: #596287;
-  --color-violet-700: #4c5575;
-  --color-violet-800: #41475f;
-  --color-violet-900: #343948;
-  --color-violet-950: #222630;
-  --color-indigo-50: #f0f2f4;
-  --color-indigo-100: #e2e7ea;
-  --color-indigo-200: #c7d1d7;
-  --color-indigo-300: #a5b4bd;
-  --color-indigo-400: #78909d;
-  --color-indigo-500: #5e7a89;
-  --color-indigo-600: #4b6877;
-  --color-indigo-700: #3f5764;
-  --color-indigo-800: #354953;
-  --color-indigo-900: #2d3d44;
-  --color-indigo-950: #1d292f;
-  --color-orange-50: #f7f1ee;
-  --color-orange-100: #efe3dc;
-  --color-orange-200: #dfccc3;
-  --color-orange-300: #caa998;
-  --color-orange-400: #ab806c;
-  --color-orange-500: #936a57;
-  --color-orange-600: #835c4d;
-  --color-orange-700: #6c4b40;
-  --color-orange-800: #593e36;
-  --color-orange-900: #49352f;
-  --color-orange-950: #2b1d19;
-  --color-emerald-50: #edf5f3;
-  --color-emerald-100: #d8e8e4;
-  --color-emerald-200: #bdd8d2;
-  --color-emerald-300: #91bdb5;
-  --color-emerald-400: #649b94;
-  --color-emerald-500: #4b827e;
-  --color-emerald-600: #3b7070;
-  --color-emerald-700: #315b5c;
-  --color-emerald-800: #2a494a;
-  --color-emerald-900: #253e3e;
-  --color-emerald-950: #112324;
-  --color-amber-50: #f8f5ec;
-  --color-amber-100: #efe8d3;
-  --color-amber-200: #dfd2aa;
-  --color-amber-300: #cbb477;
-  --color-amber-400: #b4974f;
-  --color-amber-500: #987b3d;
-  --color-amber-600: #806334;
-  --color-amber-700: #674d2c;
-  --color-amber-800: #563f29;
-  --color-amber-900: #483624;
-  --color-amber-950: #291d12;
-  --color-rose-50: #f8f1f0;
-  --color-rose-100: #f0dfdd;
-  --color-rose-200: #dfbfbc;
-  --color-rose-300: #c99590;
-  --color-rose-400: #b56d67;
-  --color-rose-500: #a65a54;
-  --color-rose-600: #934943;
-  --color-rose-700: #793d39;
-  --color-rose-800: #643532;
-  --color-rose-900: #542f2d;
-  --color-rose-950: #2e1716;
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+  --color-violet-50: #eef2ff;
+  --color-violet-100: #e0e7ff;
+  --color-violet-200: #c7d2fe;
+  --color-violet-300: #a5b4fc;
+  --color-violet-400: #818cf8;
+  --color-violet-500: #6366f1;
+  --color-violet-600: #4f46e5;
+  --color-violet-700: #4338ca;
+  --color-violet-800: #3730a3;
+  --color-violet-900: #312e81;
+  --color-violet-950: #1e1b4b;
+  --color-indigo-50: #eff6ff;
+  --color-indigo-100: #dbeafe;
+  --color-indigo-200: #bfdbfe;
+  --color-indigo-300: #93c5fd;
+  --color-indigo-400: #60a5fa;
+  --color-indigo-500: #3b82f6;
+  --color-indigo-600: #2563eb;
+  --color-indigo-700: #1d4ed8;
+  --color-indigo-800: #1e40af;
+  --color-indigo-900: #1e3a8a;
+  --color-indigo-950: #172554;
+  --color-orange-50: #fff7ed;
+  --color-orange-100: #ffedd5;
+  --color-orange-200: #fed7aa;
+  --color-orange-300: #fdba74;
+  --color-orange-400: #fb923c;
+  --color-orange-500: #f97316;
+  --color-orange-600: #ea580c;
+  --color-orange-700: #c2410c;
+  --color-orange-800: #9a3412;
+  --color-orange-900: #7c2d12;
+  --color-orange-950: #431407;
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+  --color-emerald-800: #065f46;
+  --color-emerald-900: #064e3b;
+  --color-emerald-950: #022c22;
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-amber-700: #b45309;
+  --color-amber-800: #92400e;
+  --color-amber-900: #78350f;
+  --color-amber-950: #451a03;
+  --color-rose-50: #fff1f2;
+  --color-rose-100: #ffe4e6;
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-rose-600: #e11d48;
+  --color-rose-700: #be123c;
+  --color-rose-800: #9f1239;
+  --color-rose-900: #881337;
+  --color-rose-950: #4c0519;
 }
 
 * { border-color: var(--border); }
@@ -162,12 +162,12 @@ body {
   font-size: 15px;
   line-height: 1.55;
   letter-spacing: -0.008em;
-  background: linear-gradient(180deg, #fafaf8 0, var(--background) 260px) fixed;
+  background: var(--background);
   color: var(--foreground);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
-::selection { background: #d8dce8; color: #242624; }
+::selection { background: #c7d2fe; color: #1e1b4b; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { cursor: pointer; }
 button:not(:disabled):active { opacity: 0.86; }
@@ -186,16 +186,11 @@ h1.font-serif.text-3xl { font-size: clamp(1.875rem, 3vw, 2.25rem); font-weight: 
   letter-spacing: -0.025em;
 }
 .hero-orb { position: absolute; border-radius: 999px; filter: blur(72px); opacity: 0.45; pointer-events: none; }
-.section-kicker { color: var(--brand-learning); font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+.section-kicker { color: #6b7280; font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
 .section-title { margin-top: 0.65rem; font-family: var(--font-sans); font-size: clamp(2.15rem, 4vw, 3.75rem); font-weight: 600; line-height: 1.02; letter-spacing: -0.05em; }
-.text-gradient { background: linear-gradient(100deg, #4c5575 0%, #4b6877 52%, #3b7070 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.rich-panel-learning { background: linear-gradient(135deg, #4c557f 0%, #596287 55%, #687293 100%); color: white; }
-.rich-panel-work { background: linear-gradient(135deg, #765246 0%, #835c4d 55%, #986b59 100%); color: white; }
-.rich-panel-community { background: linear-gradient(135deg, #2f6668 0%, #3b7070 55%, #4b7d78 100%); color: white; }
-.rich-panel-news { background: linear-gradient(135deg, #3f6578 0%, #4b7082 55%, #648797 100%); color: white; }
-.rich-panel-skills { background: linear-gradient(135deg, #356b6a 0%, #3b7070 48%, #765568 100%); color: white; }
+.text-gradient { background: linear-gradient(100deg, #6366f1 0%, #3b82f6 52%, #10b981 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
-.product-surface { border: 1px solid var(--border); border-radius: 1rem; background: var(--card); box-shadow: var(--shadow-surface); }
+.product-surface { border: 1px solid var(--border); border-radius: 0.75rem; background: var(--card); }
 .product-surface-interactive { transition: border-color 180ms cubic-bezier(0.23, 1, 0.32, 1), box-shadow 180ms cubic-bezier(0.23, 1, 0.32, 1), transform 180ms cubic-bezier(0.23, 1, 0.32, 1); }
 .product-surface-interactive:hover { border-color: #cfd3ce; box-shadow: var(--shadow-hover); transform: translateY(-1px); }
 [data-area="operations"] main { font-size: 14px; }
@@ -203,7 +198,7 @@ h1.font-serif.text-3xl { font-size: clamp(1.875rem, 3vw, 2.25rem); font-weight: 
 [data-area="operations"] tbody tr { transition: background-color 160ms ease; }
 [data-area="operations"] tbody tr:hover { background-color: rgba(240, 241, 238, 0.72); }
 [data-area="member"] :where(article, section).bg-white { border-color: rgba(222, 223, 218, 0.9); }
-.shadow-sm { box-shadow: var(--shadow-surface); }
+.shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 .shadow-md, .shadow-lg { box-shadow: var(--shadow-hover); }
 .shadow-xl, .shadow-2xl { box-shadow: var(--shadow-overlay); }
 .line-clamp-2 { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }

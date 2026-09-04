@@ -207,14 +207,14 @@ export default function AIAssistantBall() {
       className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-end gap-3 sm:inset-x-auto sm:bottom-6 sm:right-6"
     >
       {open && (
-        <div className="flex h-[min(70dvh,640px)] max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom))] w-full max-w-[440px] flex-col overflow-hidden rounded-3xl border border-[#d5dae5] bg-white shadow-2xl sm:w-[min(92vw,440px)]">
-          <div className="flex items-center gap-2.5 border-b border-[#dce1e9] bg-gradient-to-r from-[#e7eaf2] via-[#edf0f4] to-[#e8f0f0] px-4 py-3.5 text-slate-800">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#596287] text-white shadow-sm">
+        <div className="flex h-[min(70dvh,640px)] max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom))] w-full max-w-[440px] flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl sm:w-[min(92vw,440px)]">
+          <div className="flex items-center gap-2.5 border-b border-gray-100 bg-white px-4 py-3.5 text-gray-800">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm">
               <Sparkles className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">AI 助手小智</p>
-              <p className="flex items-center gap-1 truncate text-[11px] text-slate-500">
+              <p className="flex items-center gap-1 truncate text-[11px] text-gray-500">
                 <MapPin className="h-3 w-3 shrink-0" />
                 正在阅读：{pageLabel[kind] ?? "当前页面"}
               </p>
@@ -230,7 +230,7 @@ export default function AIAssistantBall() {
                   <button
                     disabled={clearHistory.isPending}
                     aria-label="清空对话"
-                    className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 transition hover:bg-white/70 hover:text-slate-800 disabled:opacity-50"
+                    className="grid h-7 w-7 place-items-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
                   >
                     {clearHistory.isPending ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -244,29 +244,29 @@ export default function AIAssistantBall() {
             <button
               onClick={() => setOpen(false)}
               aria-label="收起"
-              className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 transition hover:bg-white/70 hover:text-slate-800"
+              className="grid h-7 w-7 place-items-center rounded-lg text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
           <div
             ref={bodyRef}
-            className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#f6f6f3] p-3.5"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-gray-50 p-3.5"
           >
             {messages.length === 0 && (
               <div className="flex h-full flex-col items-center justify-center gap-4 p-4 text-center">
                 {historyQuery.isLoading ? (
-                  <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
                 ) : (
                   <>
-                    <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#e2e6f0] to-[#dce9e8]">
-                      <MessageCircleQuestion className="h-6 w-6 text-[#596287]" />
+                    <span className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-50">
+                      <MessageCircleQuestion className="h-6 w-6 text-blue-600" />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold text-slate-700">
+                      <p className="text-sm font-semibold text-gray-700">
                         我能读懂你正在看的页面
                       </p>
-                      <p className="mt-1.5 text-xs leading-5 text-slate-500">
+                      <p className="mt-1.5 text-xs leading-5 text-gray-500">
                         指导平台使用、总结文章内容、解释选中文字、解答 AI
                         问题都可以找我。
                       </p>
@@ -283,7 +283,7 @@ export default function AIAssistantBall() {
                           key={prompt}
                           onClick={() => void send(prompt)}
                           disabled={isStreaming}
-                          className="rounded-full border border-[#cfd5e2] bg-white px-3 py-1.5 text-[11px] font-medium text-[#505a7d] transition hover:bg-[#e9ecf4] disabled:opacity-50"
+                          className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-medium text-gray-600 transition hover:bg-gray-100 disabled:opacity-50"
                         >
                           {prompt}
                         </button>
@@ -302,7 +302,7 @@ export default function AIAssistantBall() {
                 )}
               >
                 {message.role === "assistant" && (
-                  <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dfe4ee] text-[#505a7d]">
+                  <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-blue-100 text-blue-600">
                     <Sparkles className="h-3.5 w-3.5" />
                   </span>
                 )}
@@ -310,8 +310,8 @@ export default function AIAssistantBall() {
                   className={cn(
                     "min-w-0 max-w-[85%] overflow-hidden rounded-xl px-3.5 py-2.5 text-sm leading-6",
                     message.role === "user"
-                      ? "bg-[#596287] text-white"
-                      : "border border-slate-200 bg-white text-slate-800 shadow-sm"
+                      ? "bg-blue-600 text-white"
+                      : "border border-gray-200 bg-white text-gray-800 shadow-sm"
                   )}
                 >
                   {message.role === "assistant" ? (
@@ -320,7 +320,7 @@ export default function AIAssistantBall() {
                         <Streamdown>{message.content}</Streamdown>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 text-slate-400">
+                      <div className="flex items-center gap-2 text-gray-400">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         正在生成回答…
                       </div>
@@ -332,7 +332,7 @@ export default function AIAssistantBall() {
                   )}
                 </div>
                 {message.role === "user" && (
-                  <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600">
+                  <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gray-200 text-[10px] font-bold text-gray-600">
                     我
                   </span>
                 )}
@@ -345,7 +345,7 @@ export default function AIAssistantBall() {
               已捕获选中文字（{selection.length} 字），提问会带上它
             </p>
           )}
-          <div className="border-t border-slate-100 p-3">
+          <div className="border-t border-gray-100 p-3">
             <div className="flex items-end gap-2">
               <Textarea
                 value={draft}
@@ -362,7 +362,7 @@ export default function AIAssistantBall() {
               <Button
                 disabled={!draft.trim() || isStreaming}
                 onClick={() => void send(draft)}
-                className="h-10 shrink-0 rounded-lg bg-[#596287] hover:bg-[#4c5575]"
+                className="h-10 shrink-0 rounded-lg bg-blue-600 hover:bg-blue-700"
               >
                 {isStreaming ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -371,7 +371,7 @@ export default function AIAssistantBall() {
                 )}
               </Button>
             </div>
-            <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-400">
+            <p className="mt-1.5 flex items-center gap-1 text-[10px] text-gray-400">
               <BookOpenText className="h-3 w-3" />
               助手能看到当前页面标题与正文摘录 · 回答由企业模型网关生成
             </p>
@@ -383,7 +383,7 @@ export default function AIAssistantBall() {
         onClick={() => setOpen(value => !value)}
         aria-label="AI 助手"
         className={cn(
-          "grid h-14 w-14 place-items-center rounded-full border border-white/45 bg-gradient-to-br from-[#687398] to-[#4b7082] text-white shadow-[0_12px_30px_rgba(75,112,130,.28)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(75,112,130,.34)]",
+          "grid h-14 w-14 place-items-center rounded-full bg-white text-blue-600 shadow-lg ring-1 ring-gray-200 transition hover:-translate-y-0.5",
           isStreaming && open && "animate-none"
         )}
       >

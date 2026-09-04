@@ -145,9 +145,7 @@ export default function SkillDetail() {
 
         <div className="mt-4 grid gap-6 xl:grid-cols-[1fr_.34fr] xl:items-start">
           <section className="space-y-6">
-            <div className="rich-panel-skills relative overflow-hidden rounded-[28px] p-7 shadow-sm md:p-8">
-              <div className="hero-orb -top-28 right-0 h-64 w-64 bg-white/20" />
-              <div className="hero-orb -bottom-32 -left-12 h-60 w-60 bg-rose-300/20" />
+            <div className="relative overflow-hidden rounded-xl border border-violet-100 bg-violet-50/40 p-7 md:p-8">
               <div className="relative">
                 <div className="flex items-start gap-4">
                   <span
@@ -157,24 +155,24 @@ export default function SkillDetail() {
                   </span>
                   <div className="min-w-0 pt-0.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-violet-400/15 px-2.5 py-1 text-xs font-medium text-violet-100">
+                      <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-medium text-violet-600">
                         {skill.category}
                       </span>
-                      <span className="font-mono text-xs text-white/70">
+                      <span className="font-mono text-xs text-gray-500">
                         {skill.skillKey}
                       </span>
                       {skill.version && (
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 font-mono text-xs text-slate-300">
+                        <span className="rounded-full bg-white px-2 py-0.5 font-mono text-xs text-gray-500">
                           {skill.version}
                         </span>
                       )}
                     </div>
-                    <h1 className="mt-2.5 font-serif text-3xl font-semibold md:text-4xl">
+                    <h1 className="mt-2.5 text-3xl font-semibold text-gray-900 md:text-4xl">
                       {skill.name}
                     </h1>
                   </div>
                 </div>
-                <p className="mt-5 max-w-3xl leading-7 text-white/78">
+                <p className="mt-5 max-w-3xl leading-7 text-gray-600">
                   {skill.summary}
                 </p>
                 {skill.tags.length > 0 && (
@@ -182,7 +180,7 @@ export default function SkillDetail() {
                     {skill.tags.map(tag => (
                       <span
                         key={tag}
-                        className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-violet-100"
+                        className="rounded-full bg-violet-100 px-2.5 py-1 text-xs text-violet-600"
                       >
                         {tag}
                       </span>

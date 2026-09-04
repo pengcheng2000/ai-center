@@ -120,7 +120,7 @@ export default function Profile() {
     return (
       <PlatformShell>
         <div className="grid min-h-[65vh] place-items-center">
-          <Loader2 className="h-6 w-6 animate-spin text-violet-600" />
+          <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
         </div>
       </PlatformShell>
     );
@@ -129,16 +129,16 @@ export default function Profile() {
       <PlatformShell>
         <div className="mx-auto grid min-h-[68vh] max-w-xl place-items-center px-5 text-center">
           <div>
-            <div className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-violet-100">
-              <Sparkles className="h-7 w-7 text-violet-700" />
+            <div className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-indigo-100">
+              <Sparkles className="h-7 w-7 text-indigo-600" />
             </div>
-            <h1 className="mt-6 font-serif text-4xl font-semibold">
+            <h1 className="mt-6 text-4xl font-semibold">
               登录后，建立你的 AI 成长档案。
             </h1>
-            <p className="mt-4 leading-7 text-slate-500">
+            <p className="mt-4 leading-7 text-gray-500">
               个人画像、学习记录与 Workspace 与当前账号绑定，并受访问边界保护。
             </p>
-            <Button onClick={() => startLogin()} className="mt-7 rounded-full">
+            <Button onClick={() => startLogin()} className="mt-7 rounded-lg">
               登录并进入 Workspace
             </Button>
           </div>
@@ -149,52 +149,52 @@ export default function Profile() {
   const profile = data?.profile;
   return (
     <PlatformShell>
-      <main className="mx-auto max-w-[1180px] px-5 py-12 lg:px-10">
+      <main className="mx-auto max-w-[1200px] px-5 py-12 lg:px-10">
         <button
           onClick={() => setLocation("/")}
-          className="flex items-center text-sm font-medium text-slate-500 transition hover:text-violet-700"
+          className="flex items-center text-sm font-medium text-gray-500 transition hover:text-indigo-600"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           返回能力提升平台
         </button>
-        <section className="rich-panel-learning mt-7 overflow-hidden rounded-[32px] p-7 shadow-sm lg:p-10">
+        <section className="mt-7 overflow-hidden rounded-xl border border-indigo-100 bg-indigo-50/40 p-7 lg:p-10">
           <div className="flex flex-col gap-8 md:flex-row md:items-center md:justify-between">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/14 px-3 py-1.5 text-xs font-semibold text-white/90">
+              <span className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1.5 text-xs font-semibold text-indigo-700">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 仅本人及授权运营管理员可见
               </span>
-              <h1 className="mt-5 font-serif text-4xl font-semibold">
+              <h1 className="mt-5 text-4xl font-semibold text-gray-900">
                 {user?.name || "我的"} 的 AI Workspace
               </h1>
-              <p className="mt-3 max-w-xl text-white/78">
+              <p className="mt-3 max-w-xl text-gray-600">
                 在这里维护能力画像，连接正在学习的内容与最常用的 AI 工作入口。
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl bg-white/10 p-4">
+              <div className="rounded-xl bg-white p-4">
                 <Flame className="h-5 w-5 text-orange-300" />
                 <p className="mt-5 text-2xl font-semibold">
                   {profile?.learningStreak ?? 0}
                 </p>
-                <p className="text-xs text-white/70">连续学习天数</p>
+                <p className="text-xs text-gray-500">连续学习天数</p>
               </div>
-              <div className="rounded-2xl bg-white/10 p-4">
-                <Clock3 className="h-5 w-5 text-violet-200" />
+              <div className="rounded-xl bg-white p-4">
+                <Clock3 className="h-5 w-5 text-indigo-500" />
                 <p className="mt-5 text-2xl font-semibold">
                   {profile?.weeklyLearningMinutes ?? 0}
                 </p>
-                <p className="text-xs text-white/70">本周学习分钟</p>
+                <p className="text-xs text-gray-500">本周学习分钟</p>
               </div>
             </div>
           </div>
         </section>
         <div className="mt-8 grid gap-7 lg:grid-cols-[1.08fr_.92fr]">
-          <section className="min-w-0 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="section-kicker">PERSONAL PROFILE</p>
-                <h2 className="mt-2 font-serif text-2xl font-semibold">
+                <h2 className="mt-2 text-2xl font-semibold">
                   能力画像与成长目标
                 </h2>
               </div>
@@ -210,7 +210,7 @@ export default function Profile() {
                     growthGoals: splitTags(form.growthGoals),
                   })
                 }
-                className="rounded-full"
+                className="rounded-lg"
               >
                 <Save className="mr-2 h-4 w-4" />
                 保存
@@ -268,7 +268,7 @@ export default function Profile() {
                   }
                   placeholder="用逗号分隔，例如：提示词，数据分析，报告写作"
                 />
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-gray-400">
                   这些标签用于形成你的能力雷达与学习推荐。
                 </p>
               </div>
@@ -300,18 +300,18 @@ export default function Profile() {
               </div>
             </div>
           </section>
-          <section className="min-w-0 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="min-w-0 rounded-xl border border-gray-200 bg-white p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="section-kicker">MY WORKSPACE</p>
-                <h2 className="mt-2 font-serif text-2xl font-semibold">
+                <h2 className="mt-2 text-2xl font-semibold">
                   快捷工作区
                 </h2>
               </div>
               <Button
                 onClick={() => setWorkspaceOpen(true)}
                 variant="outline"
-                className="rounded-full"
+                className="rounded-lg"
               >
                 <Plus className="mr-2 h-4 w-4" />
                 新增
@@ -322,14 +322,14 @@ export default function Profile() {
                 data.workspace.map(item => (
                   <article
                     key={item.id}
-                    className="group flex items-center gap-4 rounded-2xl bg-slate-50 p-4"
+                    className="group flex items-center gap-4 rounded-xl bg-gray-50 p-4"
                   >
-                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-100">
-                      <Sparkles className="h-4 w-4 text-violet-700" />
+                    <span className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-100">
+                      <Sparkles className="h-4 w-4 text-indigo-600" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <h3 className="font-semibold">{item.title}</h3>
-                      <p className="mt-1 truncate text-sm text-slate-500">
+                      <p className="mt-1 truncate text-sm text-gray-500">
                         {item.description}
                       </p>
                     </div>
@@ -339,21 +339,21 @@ export default function Profile() {
                       confirmLabel="确认移除"
                       pending={removeWorkspace.isPending && removeWorkspace.variables?.id === item.id}
                       onConfirm={() => removeWorkspace.mutate({ id: item.id })}
-                      trigger={<button className="grid h-9 w-9 place-items-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100" aria-label="删除快捷入口"><Trash2 className="h-4 w-4" /></button>}
+                      trigger={<button className="grid h-9 w-9 place-items-center rounded-lg text-gray-400 transition hover:bg-rose-50 hover:text-rose-600 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100" aria-label="删除快捷入口"><Trash2 className="h-4 w-4" /></button>}
                     />
                   </article>
                 ))
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-300 p-7 text-center">
-                  <BriefcaseBusiness className="mx-auto h-6 w-6 text-violet-600" />
+                <div className="rounded-xl border border-dashed border-gray-300 p-7 text-center">
+                  <BriefcaseBusiness className="mx-auto h-6 w-6 text-indigo-600" />
                   <p className="mt-3 font-semibold">还没有快捷入口</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                  <p className="mt-2 text-sm leading-6 text-gray-500">
                     把高频任务、工具或学习资料放进这里。
                   </p>
                   <Button
                     onClick={() => setWorkspaceOpen(true)}
                     variant="link"
-                    className="mt-2 text-violet-700"
+                    className="mt-2 text-indigo-600"
                   >
                     立即添加
                   </Button>
@@ -362,40 +362,40 @@ export default function Profile() {
             </div>
           </section>
         </div>
-        <section className="mt-7 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="mt-7 rounded-xl border border-gray-200 bg-white p-6">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <p className="section-kicker">LEARNING RECORD</p>
-              <h2 className="mt-2 font-serif text-2xl font-semibold">
+              <h2 className="mt-2 text-2xl font-semibold">
                 我的学习记录
               </h2>
             </div>
-            <p className="text-sm text-slate-500">进度自动与当前帐号绑定</p>
+            <p className="text-sm text-gray-500">进度自动与当前帐号绑定</p>
           </div>
           <div className="mt-7 grid gap-4 md:grid-cols-3">
             {data?.progress?.length ? (
               data.progress.map(item => (
-                <div key={item.id} className="rounded-2xl bg-violet-50 p-5">
-                  <BookOpenCheck className="h-5 w-5 text-violet-700" />
+                <div key={item.id} className="rounded-xl bg-indigo-50 p-5">
+                  <BookOpenCheck className="h-5 w-5 text-indigo-600" />
                   <p className="mt-5 text-2xl font-semibold">
                     {item.progress}%
                   </p>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm text-gray-500">
                     已记录课程 #{item.courseId}
                   </p>
                   <Progress className="mt-4 h-1.5" value={item.progress} />
                 </div>
               ))
             ) : (
-              <div className="md:col-span-3 rounded-2xl bg-slate-50 px-6 py-8 text-center">
-                <CheckCircle2 className="mx-auto h-6 w-6 text-violet-600" />
+              <div className="md:col-span-3 rounded-xl bg-gray-50 px-6 py-8 text-center">
+                <CheckCircle2 className="mx-auto h-6 w-6 text-indigo-600" />
                 <p className="mt-3 font-semibold">
                   完成第一节课程后，成长记录会出现在这里。
                 </p>
                 <Button
                   onClick={() => setLocation("/")}
                   variant="link"
-                  className="mt-2 text-violet-700"
+                  className="mt-2 text-indigo-600"
                 >
                   去看看学习路径
                 </Button>
@@ -403,18 +403,18 @@ export default function Profile() {
             )}
           </div>
         </section>
-        <section className="mt-7 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="mt-7 rounded-xl border border-gray-200 bg-white p-6">
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <p className="section-kicker">MY SKILLS</p>
-              <h2 className="mt-2 font-serif text-2xl font-semibold">
+              <h2 className="mt-2 text-2xl font-semibold">
                 我的 Skills
               </h2>
             </div>
             <Button
               onClick={() => setLocation("/skills")}
               variant="outline"
-              className="rounded-full"
+              className="rounded-lg"
             >
               进入 Skills 广场
             </Button>
@@ -433,32 +433,32 @@ export default function Profile() {
                     <button
                       key={skill.id}
                       onClick={() => setLocation(`/skills/${skill.id}`)}
-                      className="w-full rounded-xl bg-violet-50 p-4 text-left hover:ring-1 hover:ring-violet-200"
+                      className="w-full rounded-xl bg-indigo-50 p-4 text-left hover:ring-1 hover:ring-indigo-200"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-medium">{skill.name}</p>
                         <SkillStatus status={skill.reviewStatus} />
                       </div>
-                      <p className="mt-1 text-xs text-violet-700">
+                      <p className="mt-1 text-xs text-indigo-600">
                         {skill.skillKey} · {skill.version}
                       </p>
                       {skill.reviewNote && (
-                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
+                        <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-500">
                           审核说明：{skill.reviewNote}
                         </p>
                       )}
                     </button>
                   ))
                 ) : (
-                  <div className="rounded-xl border border-dashed border-slate-200 p-5 text-center">
-                    <PackageCheck className="mx-auto h-5 w-5 text-violet-600" />
-                    <p className="mt-2 text-sm text-slate-500">
+                  <div className="rounded-xl border border-dashed border-gray-200 p-5 text-center">
+                    <PackageCheck className="mx-auto h-5 w-5 text-indigo-600" />
+                    <p className="mt-2 text-sm text-gray-500">
                       你还没有分享 Skills。
                     </p>
                     <Button
                       onClick={() => setLocation("/skills/submit")}
                       variant="link"
-                      className="text-violet-700"
+                      className="text-indigo-600"
                     >
                       分享第一个 Skills
                     </Button>
@@ -479,16 +479,16 @@ export default function Profile() {
                     <button
                       key={download.id}
                       onClick={() => setLocation(`/skills/${skill.id}`)}
-                      className="w-full rounded-xl bg-slate-50 p-4 text-left hover:ring-1 hover:ring-violet-200"
+                      className="w-full rounded-xl bg-gray-50 p-4 text-left hover:ring-1 hover:ring-indigo-200"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-medium">{skill.name}</p>
-                        <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                        <span className="inline-flex items-center gap-1 text-xs text-gray-500">
                           <Download className="h-3.5 w-3.5" />
                           {download.downloadCount} 次
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className="mt-1 text-xs text-gray-500">
                         最近下载：
                         {new Date(
                           download.lastDownloadedAt
@@ -499,15 +499,15 @@ export default function Profile() {
                     </button>
                   ))
                 ) : (
-                  <div className="rounded-xl border border-dashed border-slate-200 p-5 text-center">
-                    <Download className="mx-auto h-5 w-5 text-violet-600" />
-                    <p className="mt-2 text-sm text-slate-500">
+                  <div className="rounded-xl border border-dashed border-gray-200 p-5 text-center">
+                    <Download className="mx-auto h-5 w-5 text-indigo-600" />
+                    <p className="mt-2 text-sm text-gray-500">
                       下载过的 Skills 会出现在这里。
                     </p>
                     <Button
                       onClick={() => setLocation("/skills")}
                       variant="link"
-                      className="text-violet-700"
+                      className="text-indigo-600"
                     >
                       去浏览 Skills
                     </Button>
@@ -516,14 +516,14 @@ export default function Profile() {
               </div>
             </div>
           </div>
-          <p className="mt-5 text-xs text-slate-400">
+          <p className="mt-5 text-xs text-gray-400">
             此处仅显示当前账号的投稿与下载记录，不向其他员工公开。
           </p>
         </section>
         <Dialog open={workspaceOpen} onOpenChange={setWorkspaceOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="font-serif text-2xl">
+              <DialogTitle className="text-2xl">
                 新增快捷入口
               </DialogTitle>
               <DialogDescription>添加一个仅当前账号可见的常用任务、工具或学习资料入口。</DialogDescription>
@@ -601,7 +601,7 @@ function SkillStatus({ status }: { status: string }) {
     pending: "bg-amber-100 text-amber-700",
     approved: "bg-emerald-100 text-emerald-700",
     rejected: "bg-rose-100 text-rose-700",
-    archived: "bg-slate-200 text-slate-700",
+    archived: "bg-gray-200 text-gray-700",
   };
   return (
     <Badge className={colors[status] || colors.pending}>

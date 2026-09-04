@@ -17,11 +17,11 @@ export function BrandWordmark({
         className
       )}
     >
-      <span className="block text-[21px] font-semibold leading-none tracking-[-0.055em] text-slate-900 sm:text-[23px]">
+      <span className="block text-[21px] font-semibold leading-none tracking-[-0.055em] text-gray-900 sm:text-[23px]">
         Chint<span className="text-[#237ae4]">AI</span>
       </span>
       {!compact && (
-        <span className="mt-1 block text-[9px] font-semibold tracking-[.12em] text-slate-400">
+        <span className="mt-1 block text-[9px] font-semibold tracking-[.12em] text-gray-400">
           全员 AI 能力提升平台
         </span>
       )}

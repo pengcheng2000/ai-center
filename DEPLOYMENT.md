@@ -2,8 +2,8 @@
 
 > **工程基线**：学习内容台账、三类课程资源、资讯时间线与聚合阅读信号、受管模型连接测试、企业应用中心、含互动和个人资产视图的 Skills 广场、外部 Agent 内容草稿导入，以及管理员批量直接导入 Skills 版本。  
 > **技术栈**：React 19、Vite 7、Express 4、tRPC 11、Drizzle ORM、MySQL/TiDB、Manus OAuth、对象存储与内置 AI 网关。  
-> **验证基线**：22 个测试文件、136 项测试与 TypeScript 类型检查通过。
-> **数据库迁移**：`0000` 至 `0025_loose_rafael_vega`。
+> **验证基线**：29 个测试文件、159 项测试、TypeScript 类型检查与生产构建通过。
+> **数据库迁移**：`0000` 至 `0026_kind_professor_monster`。
 
 本工程包不包含 `node_modules/`、运行日志、构建产物、数据库数据或 `.env` 文件。原始模型密钥不写入业务表；供应商配置只保留受管密钥别名。
 
@@ -13,7 +13,7 @@
 |---|---|---|
 | 依赖 | `pnpm install --frozen-lockfile` | 依赖锁定并安装成功。 |
 | 数据库 | `pnpm drizzle-kit migrate` | 所有已提交迁移应用成功。 |
-| 回归 | `pnpm test && pnpm check` | 87 项测试和类型检查通过。 |
+| 回归 | `pnpm test && pnpm check` | 159 项测试和类型检查通过。 |
 | 构建 | `pnpm build` | 生成 `dist/`，且无构建错误。 |
 | 密钥 | 在部署平台配置全部必需变量 | 不提交 `.env`，不在日志打印密钥。 |
 | 管理员 | 核对 `OWNER_OPEN_ID` 或首位管理员角色 | 可进入运营管理页面。 |
@@ -47,7 +47,7 @@
 pnpm drizzle-kit migrate
 ```
 
-当前迁移包括学习内容生命周期、模型治理、审核责任链、社区主题/收藏、资源复审、每日同步状态、人工软删除、学习内容台账、`newsReadEvents` 去重阅读表、`courseMaterials`、`courseMaterialComments`、`coursePracticeRuns` 三类学习资源表、`courseMaterials.contentHtml/contentFormat` 安全 HTML 快照字段、`llmProviders` 的受管网关状态字段、`enterpriseApps` 应用中心目录表、`skillPackages` 的员工投稿/审核责任/受控安装包元数据表、`skillReviews`、`skillDownloads` 的评分评论和个人下载资产表、`agentImportKeys`、`agentImportAssets`、`agentImportJobs` 的外部 Agent 令牌/受控媒体/草稿批次审计表，以及 `skillPackages.submissionSource/importBatchKey` 的管理员直接导入来源和批次追溯字段。对于已经运行旧版本的数据库，务必先备份，再执行迁移并确认 `__drizzle_migrations` 记录正常。
+当前迁移包括学习内容生命周期、模型治理、审核责任链、社区主题/收藏、资源复审、资讯源周期同步与员工端摘要、人工软删除、学习内容台账、`newsReadEvents` 去重阅读表、`courseMaterials`、`courseMaterialComments`、`coursePracticeRuns` 三类学习资源表、`courseMaterials.contentHtml/contentFormat` 安全 HTML 快照字段、`llmProviders` 的受管网关状态字段、`enterpriseApps` 应用中心目录表、`skillPackages` 的员工投稿/审核责任/受控安装包元数据表、`skillReviews`、`skillDownloads` 的评分评论和个人下载资产表、`agentImportKeys`、`agentImportAssets`、`agentImportJobs` 的外部 Agent 令牌/受控媒体/草稿批次审计表，以及 `skillPackages.submissionSource/importBatchKey` 的管理员直接导入来源和批次追溯字段。对于已经运行旧版本的数据库，务必先备份，再执行迁移并确认 `__drizzle_migrations` 记录正常。
 
 修改 schema 的标准流程如下：
 
@@ -78,17 +78,18 @@ NODE_ENV=production pnpm start
 
 自托管需要自行提供 HTTPS、反向代理、MySQL/TiDB、OAuth、Cookie 安全策略、对象存储和 LLM 网关。当前 `server/_core/llm.ts` 与 `server/storage.ts` 依赖 Manus 适配层；迁移至非 Manus 环境前，应替换为企业的 LLM Gateway 与 S3/OSS/COS 适配实现，并完成同等权限审计。
 
-## 6. 发布后：启用 AIHOT 每日精选全文同步
+## 6. 发布后：启用资讯自动同步与员工端摘要
 
-每日同步能力已经在代码中实现，但任务必须在已发布环境创建。发布成功后，由管理员执行：
+资讯调度能力已经在代码中实现，但任务必须在已发布环境创建。发布成功后，由管理员执行：
 
 1. 进入 **运营管理 → 资讯源管理**，找到 AIHOT 精选全文来源。
 2. 确认来源地址为 `https://aihot.virxact.com/feed/full.xml?...`，保持来源启用。
-3. 打开“每日同步”开关；建议首次设置为每天 **09:00（中国标准时间）**。
+3. 将来源同步频率设置为每 1/2/4/6/12/24 小时之一，再打开“自动同步”开关；所有周期以北京时间 09:00 为锚点。
 4. 在首次运行后检查同步状态、成功/新增/升级计数、失败原因、待审核条目和精选全文筛选。
 5. 在审核队列对新增条目运行“批量 AI 预审”；高置信低质量内容会被过滤，其余交由人工复核。
+6. 在“员工端定时摘要”中选择每 4/8/12/24 小时生成一次并启用；可先点击“立即生成”验证员工端 AI 资讯首页的摘要卡片。
 
-> 计划回调受认证保护。暂停来源或关闭每日同步后，计划执行会安全跳过拉取并保留可观察的运行状态。
+> 计划回调受认证保护。暂停来源或关闭自动同步后，计划执行会安全跳过拉取并保留可观察的运行状态。开发预览环境允许保存频率和手动生成摘要，但不会启用或恢复定时任务。
 
 ## 7. 安全与运营核对
 

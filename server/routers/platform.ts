@@ -36,6 +36,7 @@ import {
   llmModels,
   llmProviders,
   modelRoutingPolicies,
+  newsDigestSettings,
   newsFavorites,
   newsItems,
   newsReadEvents,
@@ -62,8 +63,18 @@ import {
 } from "../db";
 import { invokeLLM, listLLMModels } from "../_core/llm";
 import { ENV } from "../_core/env";
-import { createHeartbeatJob, updateHeartbeatJob } from "../_core/heartbeat";
-import { DAILY_SYNC_CRON, syncRssSourceById } from "../newsSync";
+import { syncRssSourceById } from "../newsSync";
+import {
+  generateNewsDigest,
+  getNewsDigestSettings,
+  NEWS_DIGEST_INTERVALS,
+  RSS_SYNC_INTERVALS,
+} from "../newsDigest";
+import {
+  pauseScheduledJob,
+  upsertNewsDigestJob,
+  upsertRssSyncJob,
+} from "../scheduledNews";
 import { capturePublicDocument } from "../courseCapture";
 import {
   adminProcedure,
@@ -336,6 +347,14 @@ const sourceInput = z.object({
   isEnabled: z.boolean(),
   reviewStatus: z.enum(["current", "due", "overdue"]).default("current"),
 });
+const rssSyncIntervalSchema = z.number().int().refine(
+  value => (RSS_SYNC_INTERVALS as readonly number[]).includes(value),
+  "同步频率仅支持每 1、2、4、6、12 或 24 小时"
+);
+const newsDigestIntervalSchema = z.number().int().refine(
+  value => (NEWS_DIGEST_INTERVALS as readonly number[]).includes(value),
+  "摘要频率仅支持每 4、8、12 或 24 小时"
+);
 const moduleInput = z.object({
   moduleKey: z.string().min(2).max(64),
   name: z.string().min(2).max(100),
@@ -3431,10 +3450,10 @@ export const platformRouter = router({
         })
       )
       .mutation(async ({ input }) => {
-        if (process.env.NODE_ENV === "development")
+        if (process.env.NODE_ENV === "development" && input.enabled)
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: "请先发布当前版本，再启用每日自动同步。",
+            message: "开发预览环境可以设置频率，但仅发布后可启用自动同步。",
           });
         const db = await getDb();
         if (!db)
@@ -3452,63 +3471,154 @@ export const platformRouter = router({
         if (source.sourceType !== "rss")
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "仅 RSS 资讯源支持每日自动同步",
+            message: "仅 RSS 资讯源支持自动同步",
           });
         if (input.enabled) {
-          let taskUid = source.scheduleCronTaskUid;
-          let nextExecutionAt: string | null | undefined;
-          if (taskUid) {
-            const schedule = await updateHeartbeatJob(
-              taskUid,
-              {
-                enable: true,
-                cron: DAILY_SYNC_CRON,
-                path: "/api/scheduled/rss-sync",
-                description: `每日同步：${source.name}`,
-              },
-              ""
-            );
-            nextExecutionAt = schedule.nextExecutionAt;
-          } else {
-            const schedule = await createHeartbeatJob(
-              {
-                name: `daily-rss-source-${source.id}`,
-                cron: DAILY_SYNC_CRON,
-                path: "/api/scheduled/rss-sync",
-                payload: {},
-                description: `每日同步：${source.name}`,
-              },
-              ""
-            );
-            taskUid = schedule.taskUid;
-            nextExecutionAt = schedule.nextExecutionAt;
-          }
+          const schedule = await upsertRssSyncJob(source);
           await db
             .update(newsSources)
             .set({
               scheduleEnabled: 1,
-              scheduleCronTaskUid: taskUid,
+              scheduleCronTaskUid: schedule.taskUid,
               scheduleLastError: null,
             })
             .where(eq(newsSources.id, source.id));
           return {
             success: true,
             enabled: true,
-            nextExecutionAt: nextExecutionAt ?? null,
+            nextExecutionAt: schedule.nextExecutionAt ?? null,
           };
         }
-        if (source.scheduleCronTaskUid)
-          await updateHeartbeatJob(
-            source.scheduleCronTaskUid,
-            { enable: false },
-            ""
-          );
+        await pauseScheduledJob(source.scheduleCronTaskUid);
         await db
           .update(newsSources)
           .set({ scheduleEnabled: 0 })
           .where(eq(newsSources.id, source.id));
         return { success: true, enabled: false };
       }),
+    setSourceSyncInterval: adminProcedure
+      .input(
+        z.object({
+          sourceId: z.number().int().positive(),
+          intervalHours: rssSyncIntervalSchema,
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db)
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "数据库暂不可用",
+          });
+        const [source] = await db
+          .select()
+          .from(newsSources)
+          .where(eq(newsSources.id, input.sourceId))
+          .limit(1);
+        if (!source)
+          throw new TRPCError({ code: "NOT_FOUND", message: "资讯源不存在" });
+        if (source.sourceType !== "rss")
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "仅 RSS 资讯源支持自动同步",
+          });
+        let nextExecutionAt: string | null = null;
+        let taskUid = source.scheduleCronTaskUid;
+        if (source.scheduleEnabled && process.env.NODE_ENV !== "development") {
+          const schedule = await upsertRssSyncJob({
+            ...source,
+            syncIntervalHours: input.intervalHours,
+          });
+          taskUid = schedule.taskUid;
+          nextExecutionAt = schedule.nextExecutionAt ?? null;
+        }
+        await db
+          .update(newsSources)
+          .set({
+            syncIntervalHours: input.intervalHours,
+            scheduleCronTaskUid: taskUid,
+            scheduleLastError: null,
+          })
+          .where(eq(newsSources.id, source.id));
+        return {
+          success: true,
+          intervalHours: input.intervalHours,
+          nextExecutionAt,
+        };
+      }),
+    configureNewsDigest: adminProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(async ({ input }) => {
+        if (process.env.NODE_ENV === "development" && input.enabled)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "开发预览环境可以设置摘要频率，但仅发布后可启用定时摘要。",
+          });
+        const db = await getDb();
+        if (!db)
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "数据库暂不可用",
+          });
+        const settings = await getNewsDigestSettings(db);
+        if (input.enabled) {
+          const schedule = await upsertNewsDigestJob(settings);
+          await db
+            .update(newsDigestSettings)
+            .set({
+              isEnabled: 1,
+              scheduleCronTaskUid: schedule.taskUid,
+              lastError: null,
+            })
+            .where(eq(newsDigestSettings.id, 1));
+          return {
+            success: true,
+            enabled: true,
+            nextExecutionAt: schedule.nextExecutionAt ?? null,
+          };
+        }
+        await pauseScheduledJob(settings.scheduleCronTaskUid);
+        await db
+          .update(newsDigestSettings)
+          .set({ isEnabled: 0 })
+          .where(eq(newsDigestSettings.id, 1));
+        return { success: true, enabled: false };
+      }),
+    setNewsDigestInterval: adminProcedure
+      .input(z.object({ intervalHours: newsDigestIntervalSchema }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db)
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "数据库暂不可用",
+          });
+        const settings = await getNewsDigestSettings(db);
+        let taskUid = settings.scheduleCronTaskUid;
+        let nextExecutionAt: string | null = null;
+        if (settings.isEnabled && process.env.NODE_ENV !== "development") {
+          const schedule = await upsertNewsDigestJob({
+            ...settings,
+            intervalHours: input.intervalHours,
+          });
+          taskUid = schedule.taskUid;
+          nextExecutionAt = schedule.nextExecutionAt ?? null;
+        }
+        await db
+          .update(newsDigestSettings)
+          .set({
+            intervalHours: input.intervalHours,
+            scheduleCronTaskUid: taskUid,
+            lastError: null,
+          })
+          .where(eq(newsDigestSettings.id, 1));
+        return {
+          success: true,
+          intervalHours: input.intervalHours,
+          nextExecutionAt,
+        };
+      }),
+    generateNewsDigestNow: adminProcedure.mutation(() => generateNewsDigest()),
     addModule: adminProcedure.input(moduleInput).mutation(async ({ input }) => {
       const db = await getDb();
       if (!db)

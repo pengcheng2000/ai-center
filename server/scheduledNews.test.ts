@@ -1,12 +1,17 @@
 import type { Express, Request, Response } from "express";
 import { describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ getDb: vi.fn(), syncRssSourceById: vi.fn(), authenticateRequest: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getDb: vi.fn(), syncRssSourceById: vi.fn(), authenticateRequest: vi.fn(), getNewsDigestSettings: vi.fn(), generateNewsDigest: vi.fn() }));
 vi.mock("./db", () => ({ getDb: mocks.getDb }));
 vi.mock("./newsSync", () => ({ syncRssSourceById: mocks.syncRssSourceById }));
+vi.mock("./newsDigest", () => ({
+  intervalHoursToCron: (hours: number) => `cron-${hours}`,
+  getNewsDigestSettings: mocks.getNewsDigestSettings,
+  generateNewsDigest: mocks.generateNewsDigest,
+}));
 vi.mock("./_core/sdk", () => ({ sdk: { authenticateRequest: mocks.authenticateRequest } }));
 
-import { registerScheduledNewsRoutes, runScheduledRssSync } from "./scheduledNews";
+import { registerScheduledNewsRoutes, runScheduledNewsDigest, runScheduledRssSync } from "./scheduledNews";
 
 describe("daily RSS scheduled sync", () => {
   it("syncs only an enabled source identified by the trusted schedule task id and writes its run status", async () => {
@@ -26,6 +31,30 @@ describe("daily RSS scheduled sync", () => {
     mocks.getDb.mockResolvedValue({ select: vi.fn(() => ({ from: () => ({ where: () => ({ limit: async () => [{ id: 30001, scheduleEnabled: 0, scheduleCronTaskUid: "task_paused" }] }) }) })) });
     await expect(runScheduledRssSync("task_paused")).resolves.toEqual({ ok: true, skipped: "orphan-or-paused" });
     expect(mocks.syncRssSourceById).not.toHaveBeenCalled();
+  });
+
+  it("generates an employee digest only for the enabled matching schedule", async () => {
+    mocks.getDb.mockResolvedValue({});
+    mocks.getNewsDigestSettings.mockResolvedValue({
+      isEnabled: 1,
+      scheduleCronTaskUid: "task_digest",
+    });
+    mocks.generateNewsDigest.mockResolvedValue({
+      success: true,
+      created: true,
+      digestId: 9,
+      itemCount: 6,
+    });
+    await expect(runScheduledNewsDigest("task_digest")).resolves.toMatchObject({
+      ok: true,
+      created: true,
+      itemCount: 6,
+    });
+    await expect(runScheduledNewsDigest("task_other")).resolves.toEqual({
+      ok: true,
+      skipped: "orphan-or-paused",
+    });
+    expect(mocks.generateNewsDigest).toHaveBeenCalledTimes(1);
   });
 
   it("rejects non-cron HTTP calls before any scheduled source lookup", async () => {

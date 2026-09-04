@@ -26,6 +26,7 @@ import {
   ArrowLeft,
   Bot,
   CheckCircle2,
+  Clock3,
   ClipboardCheck,
   Edit3,
   Eye,
@@ -38,6 +39,7 @@ import {
   Plus,
   RadioTower,
   RefreshCw,
+  Send,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
@@ -164,12 +166,49 @@ export default function Operations() {
       onSuccess: result => {
         toast.success(
           result.enabled
-            ? `已启用每日 09:00 自动同步${result.nextExecutionAt ? `；下次运行：${new Date(result.nextExecutionAt).toLocaleString()}` : ""}`
-            : "已暂停每日自动同步"
+            ? `已启用自动同步${result.nextExecutionAt ? `；下次运行：${new Date(result.nextExecutionAt).toLocaleString()}` : ""}`
+            : "已暂停自动同步"
         );
         refresh();
       },
       onError: error => toast.error(`计划配置失败：${error.message}`),
+    });
+  const setSourceSyncInterval =
+    trpc.platform.operations.setSourceSyncInterval.useMutation({
+      onSuccess: result => {
+        toast.success(`已设置为每 ${result.intervalHours} 小时同步`);
+        refresh();
+      },
+      onError: error => toast.error(`同步频率设置失败：${error.message}`),
+    });
+  const configureNewsDigest =
+    trpc.platform.operations.configureNewsDigest.useMutation({
+      onSuccess: result => {
+        toast.success(result.enabled ? "已启用员工端定时摘要" : "已暂停员工端定时摘要");
+        refresh();
+      },
+      onError: error => toast.error(`摘要计划配置失败：${error.message}`),
+    });
+  const setNewsDigestInterval =
+    trpc.platform.operations.setNewsDigestInterval.useMutation({
+      onSuccess: result => {
+        toast.success(`员工端摘要已设置为每 ${result.intervalHours} 小时生成`);
+        refresh();
+      },
+      onError: error => toast.error(`摘要频率设置失败：${error.message}`),
+    });
+  const generateNewsDigestNow =
+    trpc.platform.operations.generateNewsDigestNow.useMutation({
+      onSuccess: result => {
+        toast.success(
+          result.created
+            ? `摘要已生成，共收录 ${result.itemCount} 条资讯`
+            : "暂无新的已审核资讯，未生成空摘要"
+        );
+        refresh();
+        void utils.platform.catalog.invalidate();
+      },
+      onError: error => toast.error(`摘要生成失败：${error.message}`),
     });
   const addSource = trpc.platform.operations.addSource.useMutation({
     onSuccess: result => {
@@ -648,7 +687,7 @@ export default function Operations() {
               <SectionHeading
                 icon={RadioTower}
                 title="资讯源管理"
-                description="新增 RSS 后会立即导入首批内容；可手动同步，或启用每日 09:00 自动同步、去重入库并进入审核队列。"
+                description="新增 RSS 后会立即导入首批内容；可按来源设置同步频率，并将审核通过的资讯定时汇总到员工端。"
                 action={
                   <Button
                     onClick={() => setSourceDraft(emptySource())}
@@ -659,14 +698,76 @@ export default function Operations() {
                   </Button>
                 }
               />
+              <div className="mt-5 flex flex-col gap-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-start gap-3">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white text-blue-600">
+                    <Send className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="font-semibold text-gray-900">员工端定时摘要</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      聚合尚未进入摘要的已审核资讯；没有新内容时不会生成空摘要。
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      {data.latestDigest
+                        ? `最近生成：${new Date(data.latestDigest.generatedAt).toLocaleString()} · ${data.latestDigest.itemCount} 条`
+                        : "尚未生成摘要"}
+                    </p>
+                    {data.digestSettings.lastError && (
+                      <p className="mt-1 text-xs text-rose-600">
+                        失败：{data.digestSettings.lastError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex h-9 items-center gap-2 rounded-lg border border-blue-100 bg-white px-3 text-xs font-medium text-gray-600">
+                    <Clock3 className="h-3.5 w-3.5 text-blue-600" />
+                    每
+                    <select
+                      aria-label="员工端摘要生成频率"
+                      value={data.digestSettings.intervalHours}
+                      disabled={setNewsDigestInterval.isPending}
+                      onChange={event =>
+                        setNewsDigestInterval.mutate({
+                          intervalHours: Number(event.target.value) as 4 | 8 | 12 | 24,
+                        })
+                      }
+                      className="bg-transparent font-semibold text-gray-900 outline-none"
+                    >
+                      {[4, 8, 12, 24].map(hours => (
+                        <option key={hours} value={hours}>{hours}</option>
+                      ))}
+                    </select>
+                    小时
+                  </label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={generateNewsDigestNow.isPending}
+                    onClick={() => generateNewsDigestNow.mutate()}
+                  >
+                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${generateNewsDigestNow.isPending ? "animate-spin" : ""}`} />
+                    立即生成
+                  </Button>
+                  <div title={dailySyncConfigurationAvailable ? undefined : dailySyncUnavailableMessage}>
+                    <Switch
+                      aria-label="启用员工端定时摘要"
+                      disabled={!dailySyncConfigurationAvailable || configureNewsDigest.isPending}
+                      checked={Boolean(data.digestSettings.isEnabled)}
+                      onCheckedChange={enabled => configureNewsDigest.mutate({ enabled })}
+                    />
+                  </div>
+                </div>
+              </div>
               <div className="mt-6 overflow-x-auto">
-                <table className="w-full min-w-[840px] text-left text-sm">
+                <table className="w-full min-w-[920px] text-left text-sm">
                   <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
                     <tr>
                       <th className="pb-3 font-medium">来源</th>
                       <th className="pb-3 font-medium">类型 / 分类</th>
                       <th className="pb-3 font-medium">处理状态</th>
-                      <th className="pb-3 font-medium">每日同步</th>
+                      <th className="pb-3 font-medium">自动同步</th>
                       <th className="pb-3 font-medium">启用</th>
                       <th className="pb-3"></th>
                     </tr>
@@ -704,35 +805,58 @@ export default function Operations() {
                         <td className="py-4">
                           {source.sourceType === "rss" ? (
                             <div
+                              className="min-w-40"
                               title={
                                 dailySyncConfigurationAvailable
                                   ? undefined
                                   : dailySyncUnavailableMessage
                               }
                             >
-                              <Switch
-                                aria-label={`${source.name}每日自动同步`}
-                                disabled={
-                                  !dailySyncConfigurationAvailable ||
-                                  !source.isEnabled ||
-                                  configureDailySync.isPending
-                                }
-                                checked={Boolean(source.scheduleEnabled)}
-                                onCheckedChange={checked =>
-                                  configureDailySync.mutate({
-                                    sourceId: source.id,
-                                    enabled: checked,
-                                  })
-                                }
-                              />
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  aria-label={`${source.name}自动同步`}
+                                  disabled={
+                                    !dailySyncConfigurationAvailable ||
+                                    !source.isEnabled ||
+                                    configureDailySync.isPending
+                                  }
+                                  checked={Boolean(source.scheduleEnabled)}
+                                  onCheckedChange={checked =>
+                                    configureDailySync.mutate({
+                                      sourceId: source.id,
+                                      enabled: checked,
+                                    })
+                                  }
+                                />
+                                <label className="flex h-8 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 text-xs text-gray-500">
+                                  每
+                                  <select
+                                    aria-label={`${source.name}同步频率`}
+                                    value={source.syncIntervalHours}
+                                    disabled={setSourceSyncInterval.isPending}
+                                    onChange={event =>
+                                      setSourceSyncInterval.mutate({
+                                        sourceId: source.id,
+                                        intervalHours: Number(event.target.value),
+                                      })
+                                    }
+                                    className="bg-transparent font-semibold text-gray-900 outline-none"
+                                  >
+                                    {[1, 2, 4, 6, 12, 24].map(hours => (
+                                      <option key={hours} value={hours}>{hours}</option>
+                                    ))}
+                                  </select>
+                                  小时
+                                </label>
+                              </div>
                               <p className="mt-1 text-xs text-slate-400">
                                 {!dailySyncConfigurationAvailable
-                                  ? "发布后可启用"
+                                  ? "频率可配置，发布后可启用"
                                   : source.scheduleEnabled
-                                  ? source.scheduleLastRunAt
-                                    ? `上次：${new Date(source.scheduleLastRunAt).toLocaleString()}`
-                                    : "每日 09:00 执行"
-                                  : "未启用"}
+                                    ? source.scheduleLastRunAt
+                                      ? `上次：${new Date(source.scheduleLastRunAt).toLocaleString()}`
+                                      : "等待首次自动同步"
+                                    : "未启用"}
                               </p>
                               {source.scheduleLastError && (
                                 <p
@@ -911,7 +1035,7 @@ export default function Operations() {
                 {data.agents.map(agent => (
                   <article
                     key={agent.id}
-                    className="rich-panel-news rounded-2xl p-5 shadow-sm"
+                    className="rounded-xl border border-blue-100 bg-blue-50/40 p-5"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -920,14 +1044,14 @@ export default function Operations() {
                           <span
                             className={
                               agent.isEnabled
-                                ? "rounded-full bg-emerald-400/15 px-2 py-0.5 text-xs text-emerald-300"
-                                : "rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-300"
+                                ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700"
+                                : "rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500"
                             }
                           >
                             {agent.isEnabled ? "运行中" : "已停用"}
                           </span>
                         </div>
-                        <p className="mt-2 text-sm leading-5 text-slate-300">
+                        <p className="mt-2 text-sm leading-5 text-gray-600">
                           {agent.description}
                         </p>
                       </div>
@@ -941,7 +1065,7 @@ export default function Operations() {
                         }
                       />
                     </div>
-                    <div className="mt-5 flex items-center justify-between text-xs text-slate-300">
+                    <div className="mt-5 flex items-center justify-between text-xs text-gray-500">
                       <span>模型：{agent.modelPreference}</span>
                       <span>复核阈值：{agent.confidenceThreshold}%</span>
                       <Button
@@ -957,7 +1081,7 @@ export default function Operations() {
                         }
                         size="sm"
                         variant="secondary"
-                        className="rounded-full bg-white text-slate-900 hover:bg-violet-50"
+                        className="rounded-lg bg-blue-600 text-white hover:bg-blue-700"
                       >
                         配置
                       </Button>

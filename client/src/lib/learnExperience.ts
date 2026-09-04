@@ -105,12 +105,12 @@ export const ANNOTATION_COLOR_CLASSES: Record<string, { fill: string; border: st
 // ---------- 卡片网格 ----------
 
 // 卡片配色按路径 accent 取值，缺省回退 violet。
-export const PATH_ACCENTS: Record<string, { gradient: string; chip: string; icon: string; ring: string; button: string }> = {
-  violet: { gradient: "from-[#4c557f] via-[#596287] to-[#626a91]", chip: "bg-[#eef0f7] text-[#4c557f]", icon: "bg-[#596287]", ring: "ring-[#cfd3e2]", button: "bg-[#596287] text-white hover:bg-[#4c557f]" },
-  orange: { gradient: "from-[#765246] via-[#835c4d] to-[#936453]", chip: "bg-[#f5eeea] text-[#765246]", icon: "bg-[#835c4d]", ring: "ring-[#dfccc3]", button: "bg-[#835c4d] text-white hover:bg-[#765246]" },
-  emerald: { gradient: "from-[#2f6668] via-[#3b7070] to-[#477773]", chip: "bg-[#e9f2f1] text-[#2f6668]", icon: "bg-[#3b7070]", ring: "ring-[#c5d9d7]", button: "bg-[#3b7070] text-white hover:bg-[#2f6668]" },
-  sky: { gradient: "from-[#3f6578] via-[#4b7082] to-[#587b8b]", chip: "bg-[#ebf1f4] text-[#3f6578]", icon: "bg-[#4b7082]", ring: "ring-[#c7d6dd]", button: "bg-[#4b7082] text-white hover:bg-[#3f6578]" },
-  rose: { gradient: "from-[#755566] via-[#825f70] to-[#906b7b]", chip: "bg-[#f3edf0] text-[#755566]", icon: "bg-[#825f70]", ring: "ring-[#dccbd3]", button: "bg-[#825f70] text-white hover:bg-[#755566]" },
+export const PATH_ACCENTS: Record<string, { gradient: string; chip: string; icon: string; ring: string; button: string; text: string; bar: string }> = {
+  violet: { gradient: "bg-indigo-50/60 border-b border-indigo-100", chip: "bg-indigo-50 text-indigo-700", icon: "bg-indigo-100 text-indigo-600", ring: "ring-indigo-200", button: "bg-indigo-600 text-white hover:bg-indigo-700", text: "text-indigo-600", bar: "bg-indigo-500" },
+  orange: { gradient: "bg-orange-50/60 border-b border-orange-100", chip: "bg-orange-50 text-orange-700", icon: "bg-orange-100 text-orange-600", ring: "ring-orange-200", button: "bg-orange-600 text-white hover:bg-orange-700", text: "text-orange-600", bar: "bg-orange-500" },
+  emerald: { gradient: "bg-emerald-50/60 border-b border-emerald-100", chip: "bg-emerald-50 text-emerald-700", icon: "bg-emerald-100 text-emerald-600", ring: "ring-emerald-200", button: "bg-emerald-600 text-white hover:bg-emerald-700", text: "text-emerald-600", bar: "bg-emerald-500" },
+  sky: { gradient: "bg-blue-50/60 border-b border-blue-100", chip: "bg-blue-50 text-blue-700", icon: "bg-blue-100 text-blue-600", ring: "ring-blue-200", button: "bg-blue-600 text-white hover:bg-blue-700", text: "text-blue-600", bar: "bg-blue-500" },
+  rose: { gradient: "bg-violet-50/60 border-b border-violet-100", chip: "bg-violet-50 text-violet-700", icon: "bg-violet-100 text-violet-600", ring: "ring-violet-200", button: "bg-violet-600 text-white hover:bg-violet-700", text: "text-violet-600", bar: "bg-violet-500" },
 };
 export function pathAccent(accent: string | null | undefined) { return PATH_ACCENTS[accent ?? "violet"] ?? PATH_ACCENTS.violet; }
 

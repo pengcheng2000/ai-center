@@ -67,17 +67,17 @@ export default function SkillsHub() {
       <PlatformShell>
         <main className="mx-auto grid min-h-[66vh] max-w-xl place-items-center px-5 text-center">
           <div>
-            <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-violet-50 text-violet-600">
               <LockKeyhole className="h-6 w-6" />
             </span>
-            <h1 className="mt-5 font-serif text-3xl font-semibold">
+            <h1 className="mt-5 text-3xl font-semibold">
               登录后进入企业 Skills 广场
             </h1>
-            <p className="mt-3 leading-7 text-slate-500">
+            <p className="mt-3 leading-7 text-gray-500">
               浏览经运营审核的可复用
               Skills，分享工作方法，并安全获取当前会话的下载指令。
             </p>
-            <Button onClick={() => startLogin()} className="mt-6 rounded-full">
+            <Button onClick={() => startLogin()} className="mt-6 rounded-lg">
               登录后查看 Skills
             </Button>
           </div>
@@ -87,41 +87,32 @@ export default function SkillsHub() {
 
   return (
     <PlatformShell>
-      <main className="mx-auto max-w-[1500px] px-5 py-9 lg:px-10">
-        <section className="rich-panel-skills relative overflow-hidden rounded-[28px] p-7 shadow-sm">
-          <div className="hero-orb -top-24 right-8 h-60 w-60 bg-white/20" />
-          <div className="hero-orb -bottom-28 left-1/3 h-56 w-56 bg-rose-300/25" />
-          <div className="relative flex flex-col justify-between gap-6 md:flex-row md:items-end">
-            <div>
-              <p className="text-xs font-bold tracking-[.18em] text-white/65">
-                SKILLS MARKETPLACE
-              </p>
-              <h1 className="mt-2 font-serif text-4xl font-semibold">
-                企业 Skills 广场
-              </h1>
-              <p className="mt-3 max-w-2xl leading-7 text-white/78">
-                把有效的 Agent
-                工作方法、领域知识和标准流程沉淀为可审阅、可复用的 Skills。
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="inline-flex items-center gap-2 rounded-full bg-white/14 px-4 py-2 text-sm text-white/90">
-                <Puzzle className="h-4 w-4" />
-                {data?.length ?? 0} 个已上架
-              </span>
-              <Button
-                onClick={() => setLocation("/skills/submit")}
-                className="rounded-full bg-white text-slate-900 hover:bg-violet-50"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                分享 Skills
-              </Button>
-            </div>
+      <main className="mx-auto max-w-[1400px] px-5 py-9 lg:px-10">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <p className="text-xs font-semibold tracking-wide text-violet-600">SKILLS 广场</p>
+            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-gray-900 md:text-3xl">企业 Skills 广场</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+              把有效的 Agent 工作方法、领域知识和标准流程沉淀为可审阅、可复用的 Skills。
+            </p>
           </div>
-        </section>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-2 rounded-lg bg-violet-50 px-4 py-2 text-sm text-violet-600">
+              <Puzzle className="h-4 w-4" />
+              {data?.length ?? 0} 个已上架
+            </span>
+            <Button
+              onClick={() => setLocation("/skills/submit")}
+              className="rounded-lg bg-violet-600 text-white hover:bg-violet-600"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              分享 Skills
+            </Button>
+          </div>
+        </div>
 
         {mySubmissions?.length ? (
-          <section className="mt-6 rounded-2xl border border-violet-100 bg-violet-50/60 p-5">
+          <section className="mt-6 rounded-xl border border-violet-100 bg-violet-50/60 p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-semibold text-violet-950">我的投稿</p>
@@ -129,7 +120,7 @@ export default function SkillsHub() {
                   可查看自己待审核、已上架或被退回的 Skills。
                 </p>
               </div>
-              <Badge className="bg-white text-violet-700">
+              <Badge className="bg-white text-violet-600">
                 {mySubmissions.length} 项
               </Badge>
             </div>
@@ -138,17 +129,17 @@ export default function SkillsHub() {
                 <button
                   key={skill.id}
                   onClick={() => setLocation(`/skills/${skill.id}`)}
-                  className="rounded-xl bg-white p-4 text-left shadow-sm transition hover:ring-1 hover:ring-violet-200"
+                  className="rounded-xl bg-white p-4 text-left transition hover:ring-1 hover:ring-violet-200"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="truncate font-medium">{skill.name}</p>
                     <SubmissionStatus status={skill.reviewStatus} />
                   </div>
-                  <p className="mt-1 truncate font-mono text-xs text-slate-500">
+                  <p className="mt-1 truncate font-mono text-xs text-gray-500">
                     {skill.skillKey} · {skill.version}
                   </p>
                   {skill.reviewNote && (
-                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-500">
                       审核说明：{skill.reviewNote}
                     </p>
                   )}
@@ -158,10 +149,10 @@ export default function SkillsHub() {
           </section>
         ) : null}
 
-        <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="mt-7 rounded-xl border border-gray-200 bg-white p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
                 value={keyword}
                 onChange={event => setKeyword(event.target.value)}
@@ -174,15 +165,15 @@ export default function SkillsHub() {
                 <button
                   key={option.value}
                   onClick={() => setSort(option.value)}
-                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${sort === option.value ? "bg-violet-100 text-violet-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"}`}
+                  className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition ${sort === option.value ? "bg-violet-100 text-violet-600" : "text-gray-500 hover:bg-gray-100 hover:text-gray-800"}`}
                   aria-pressed={sort === option.value}
                 >
                   {option.label}
                 </button>
               ))}
-              <span className="mx-1 hidden h-5 w-px bg-slate-200 lg:block" />
+              <span className="mx-1 hidden h-5 w-px bg-gray-200 lg:block" />
               <div
-                className="flex rounded-lg border border-slate-200 p-0.5"
+                className="flex rounded-lg border border-gray-200 p-0.5"
                 role="group"
                 aria-label="视图切换"
               >
@@ -190,7 +181,7 @@ export default function SkillsHub() {
                   onClick={() => setView("grid")}
                   aria-label="卡片视图"
                   aria-pressed={view === "grid"}
-                  className={`grid h-7 w-8 place-items-center rounded-md transition ${view === "grid" ? "bg-violet-100 text-violet-700" : "text-slate-400 hover:text-slate-700"}`}
+                  className={`grid h-7 w-8 place-items-center rounded-md transition ${view === "grid" ? "bg-violet-100 text-violet-600" : "text-gray-400 hover:text-gray-700"}`}
                 >
                   <LayoutGrid className="h-4 w-4" />
                 </button>
@@ -198,7 +189,7 @@ export default function SkillsHub() {
                   onClick={() => setView("list")}
                   aria-label="列表视图"
                   aria-pressed={view === "list"}
-                  className={`grid h-7 w-8 place-items-center rounded-md transition ${view === "list" ? "bg-violet-100 text-violet-700" : "text-slate-400 hover:text-slate-700"}`}
+                  className={`grid h-7 w-8 place-items-center rounded-md transition ${view === "list" ? "bg-violet-100 text-violet-600" : "text-gray-400 hover:text-gray-700"}`}
                 >
                   <Rows3 className="h-4 w-4" />
                 </button>
@@ -210,7 +201,7 @@ export default function SkillsHub() {
               onClick={() => setCategory(undefined)}
               size="sm"
               variant={!category ? "default" : "outline"}
-              className="rounded-full"
+              className="rounded-lg"
             >
               全部类型
             </Button>
@@ -220,7 +211,7 @@ export default function SkillsHub() {
                 onClick={() => setCategory(item.category)}
                 size="sm"
                 variant={category === item.category ? "default" : "outline"}
-                className="rounded-full"
+                className="rounded-lg"
               >
                 {item.category}
               </Button>
@@ -228,7 +219,7 @@ export default function SkillsHub() {
           </div>
         </section>
 
-        <p className="mt-4 text-sm text-slate-500">
+        <p className="mt-4 text-sm text-gray-500">
           找到 {data?.length ?? 0} 个已上架 Skills
           {debounced ? ` · “${debounced}”` : ""}
           {category ? ` · ${category}` : ""}
@@ -249,7 +240,7 @@ export default function SkillsHub() {
             {!data?.length && <EmptyResult />}
           </section>
         ) : (
-          <section className="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <section className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white">
             {data?.map(
               ({ skill, authorName, averageRating, reviewCount }, index) => (
                 <SkillRow
@@ -277,10 +268,10 @@ export default function SkillsHub() {
 
 function EmptyResult() {
   return (
-    <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+    <div className="col-span-full rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
       <BookOpenCheck className="mx-auto h-6 w-6 text-violet-600" />
       <h2 className="mt-3 font-semibold">尚无匹配的已上架 Skills</h2>
-      <p className="mt-2 text-sm text-slate-500">
+      <p className="mt-2 text-sm text-gray-500">
         尝试更换关键词或分类；也可以分享第一个 Skills，提交后会进入运营审核。
       </p>
     </div>
@@ -325,7 +316,7 @@ function SkillCard({
           onOpen();
         }
       }}
-      className="group flex h-full cursor-pointer flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+      className="group flex h-full cursor-pointer flex-col rounded-xl border border-gray-200 bg-white p-5 transition hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
     >
       <div className="flex items-start justify-between gap-3">
         <span
@@ -338,7 +329,7 @@ function SkillCard({
         </Badge>
       </div>
       <h2
-        className="mt-4 truncate text-base font-bold text-slate-900"
+        className="mt-4 truncate text-base font-bold text-gray-900"
         title={skill.name}
       >
         {skill.name}
@@ -348,31 +339,31 @@ function SkillCard({
         title={`${skill.skillKey} · ${skill.version}`}
       >
         {skill.skillKey}
-        <span className="mx-1 text-slate-300">·</span>
-        <span className="text-slate-400">{skill.version}</span>
+        <span className="mx-1 text-gray-300">·</span>
+        <span className="text-gray-400">{skill.version}</span>
       </p>
-      <p className="mt-3 line-clamp-3 min-h-[72px] text-sm leading-6 text-slate-500">
+      <p className="mt-3 line-clamp-3 min-h-[72px] text-sm leading-6 text-gray-500">
         {skill.summary}
       </p>
       <div className="mt-auto pt-4">
-        <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3.5">
+        <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-3.5">
           <span className="flex items-center gap-1 text-sm font-semibold text-amber-500">
             <Star className="h-4 w-4 fill-current" />
             {rating ? (
               rating.toFixed(1)
             ) : (
-              <span className="text-xs font-normal text-slate-400">
+              <span className="text-xs font-normal text-gray-400">
                 暂无评分
               </span>
             )}
             {reviewCount > 0 && (
-              <span className="text-xs font-normal text-slate-400">
+              <span className="text-xs font-normal text-gray-400">
                 · {reviewCount} 条体验
               </span>
             )}
           </span>
-          <span className="flex min-w-0 items-center gap-1.5 text-xs text-slate-400">
-            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700">
+          <span className="flex min-w-0 items-center gap-1.5 text-xs text-gray-400">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-600">
               {author[0]}
             </span>
             <span className="truncate">{author}</span>
@@ -382,13 +373,13 @@ function SkillCard({
           {tags.map(tag => (
             <span
               key={tag}
-              className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500"
+              className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500"
             >
               {tag}
             </span>
           ))}
           {overflow > 0 && (
-            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-400">
+            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-400">
               +{overflow}
             </span>
           )}
@@ -426,7 +417,7 @@ function SkillRow({
   return (
     <button
       onClick={onOpen}
-      className={`group flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-violet-50/50 ${divider ? "border-t border-slate-100" : ""}`}
+      className={`group flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-violet-50/50 ${divider ? "border-t border-gray-100" : ""}`}
     >
       <span
         className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${hue}`}
@@ -435,14 +426,14 @@ function SkillRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
-          <span className="truncate font-semibold text-slate-900">
+          <span className="truncate font-semibold text-gray-900">
             {skill.name}
           </span>
-          <span className="hidden shrink-0 font-mono text-xs text-slate-400 md:inline">
+          <span className="hidden shrink-0 font-mono text-xs text-gray-400 md:inline">
             {skill.version}
           </span>
         </span>
-        <span className="mt-0.5 block truncate text-sm text-slate-500">
+        <span className="mt-0.5 block truncate text-sm text-gray-500">
           {skill.summary}
         </span>
       </span>
@@ -451,10 +442,10 @@ function SkillRow({
         {rating ? (
           rating.toFixed(1)
         ) : (
-          <span className="text-xs font-normal text-slate-400">暂无评分</span>
+          <span className="text-xs font-normal text-gray-400">暂无评分</span>
         )}
         {reviewCount > 0 && (
-          <span className="text-xs font-normal text-slate-400">
+          <span className="text-xs font-normal text-gray-400">
             ({reviewCount})
           </span>
         )}
@@ -462,10 +453,10 @@ function SkillRow({
       <Badge variant="secondary" className="hidden shrink-0 xl:inline-flex">
         <span className="max-w-24 truncate">{skill.category}</span>
       </Badge>
-      <span className="hidden w-20 shrink-0 truncate text-right text-xs text-slate-400 2xl:block">
+      <span className="hidden w-20 shrink-0 truncate text-right text-xs text-gray-400 2xl:block">
         {authorName || "企业成员"}
       </span>
-      <ArrowUpRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-violet-600" />
+      <ArrowUpRight className="h-4 w-4 shrink-0 text-gray-300 transition group-hover:text-violet-600" />
     </button>
   );
 }
@@ -475,7 +466,7 @@ function SubmissionStatus({ status }: { status: string }) {
     pending: "bg-amber-100 text-amber-700",
     approved: "bg-emerald-100 text-emerald-700",
     rejected: "bg-rose-100 text-rose-700",
-    archived: "bg-slate-200 text-slate-700",
+    archived: "bg-gray-200 text-gray-700",
   };
   const labels: Record<string, string> = {
     pending: "待审核",

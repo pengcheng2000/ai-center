@@ -127,10 +127,10 @@ export default function Community() {
     return (
       <PlatformShell>
         <main className="mx-auto grid min-h-[70vh] max-w-xl place-items-center px-4 text-center">
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-            <Sparkles className="mx-auto h-8 w-8 text-violet-600" />
-            <h1 className="mt-4 font-serif text-3xl">登录后进入实践社区</h1>
-            <p className="mt-3 text-sm leading-6 text-slate-500">
+          <div className="rounded-xl border border-gray-200 bg-white p-8">
+            <Sparkles className="mx-auto h-8 w-8 text-emerald-600" />
+            <h1 className="mt-4 text-3xl">登录后进入实践社区</h1>
+            <p className="mt-3 text-sm leading-6 text-gray-500">
               这里沉淀的是企业内部的工作方法、案例与讨论。登录后可阅读、互动并发布自己的实践。
             </p>
             <Button onClick={() => startLogin()} className="mt-6 rounded-lg">
@@ -166,14 +166,14 @@ export default function Community() {
 
   return (
     <PlatformShell>
-      <main className="mx-auto max-w-[1440px] px-4 py-7 lg:px-7">
-        <header className="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-end lg:justify-between">
+      <main className="mx-auto max-w-[1400px] px-4 py-7 lg:px-7">
+        <header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
           <div>
-            <p className="section-kicker">PRACTICE COMMUNITY</p>
-            <h1 className="mt-1 font-serif text-4xl font-semibold">
+            <p className="text-xs font-semibold tracking-wide text-emerald-600">实践社区</p>
+            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-gray-900 md:text-3xl">
               实践不是展示，是可复用的工作资产。
             </h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
               记录真实场景、方法、结果和边界。让一人的试验，成为更多人的起点。
             </p>
           </div>
@@ -185,30 +185,30 @@ export default function Community() {
 
         <div className="mt-6 grid gap-5 xl:grid-cols-[.72fr_1.28fr]">
           <aside className="space-y-4">
-            <section className="rich-panel-community rounded-2xl p-5 shadow-sm">
-              <p className="text-xs font-bold tracking-[.16em] text-white/65">
+            <section className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-5">
+              <p className="text-xs font-bold tracking-[.16em] text-emerald-500">
                 COMMUNITY PRINCIPLE
               </p>
-              <p className="mt-3 text-lg font-semibold leading-7">
+              <p className="mt-3 text-lg font-semibold leading-7 text-gray-900">
                 写下什么有效，也写下什么不适用。
               </p>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
+              <p className="mt-3 text-sm leading-6 text-gray-600">
                 高质量实践应说明背景、过程、结果与使用边界，让经验经得起复用和复盘。
               </p>
               <Button
                 onClick={() => setDraft(emptyDraft())}
                 variant="secondary"
-                className="mt-5 w-full rounded-lg bg-white text-slate-900"
+                className="mt-5 w-full rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
               >
                 开始一份实践记录
               </Button>
             </section>
-            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <section className="rounded-xl border border-gray-200 bg-white p-5">
               <div className="flex items-center justify-between">
                 <p className="font-semibold">关注主题</p>
                 <button
                   onClick={() => setTopicId(null)}
-                  className="text-xs text-violet-700"
+                  className="text-xs text-emerald-600"
                 >
                   全部
                 </button>
@@ -226,8 +226,8 @@ export default function Community() {
                       className={cn(
                         "rounded-full border px-3 py-1.5 text-xs font-medium",
                         topic.id === topicId
-                          ? "border-violet-600 bg-violet-600 text-white"
-                          : "border-violet-100 bg-violet-50 text-violet-700"
+                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          : "border-emerald-100 bg-emerald-50 text-emerald-600"
                       )}
                     >
                       <button
@@ -251,13 +251,13 @@ export default function Community() {
                   );
                 })}
               </div>
-              <p className="mt-4 text-xs leading-5 text-slate-500">
+              <p className="mt-4 text-xs leading-5 text-gray-500">
                 高价值排序综合有效互动、运营精选和讨论量；主题关注用于员工的个人知识流，而非公开社交分发。
               </p>
             </section>
-            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <section className="rounded-xl border border-gray-200 bg-white p-5">
               <p className="font-semibold">写作提示</p>
-              <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <div className="mt-4 space-y-3 text-sm text-gray-600">
                 <Tip
                   label="描述工作场景"
                   text="先说清问题，读者才能判断是否适用。"
@@ -279,7 +279,7 @@ export default function Community() {
               <div>
                 <h2 className="text-xl font-semibold">
                   {selectedTopic ? `#${selectedTopic.name}` : "全部实践"}{" "}
-                  <span className="text-sm font-normal text-slate-400">
+                  <span className="text-sm font-normal text-gray-400">
                     {ordered.length}
                   </span>
                 </h2>
@@ -287,10 +287,10 @@ export default function Community() {
                   <button
                     onClick={() => setSort("recent")}
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs",
+                      "rounded-lg px-3 py-1 text-xs",
                       sort === "recent"
-                        ? "bg-violet-100 text-violet-700"
-                        : "bg-slate-100 text-slate-500"
+                        ? "bg-emerald-100 text-emerald-600"
+                        : "bg-gray-100 text-gray-500"
                     )}
                   >
                     最新
@@ -298,10 +298,10 @@ export default function Community() {
                   <button
                     onClick={() => setSort("hot")}
                     className={cn(
-                      "rounded-full px-3 py-1 text-xs",
+                      "rounded-lg px-3 py-1 text-xs",
                       sort === "hot"
-                        ? "bg-violet-100 text-violet-700"
-                        : "bg-slate-100 text-slate-500"
+                        ? "bg-emerald-100 text-emerald-600"
+                        : "bg-gray-100 text-gray-500"
                     )}
                   >
                     高价值
@@ -309,7 +309,7 @@ export default function Community() {
                 </div>
               </div>
               <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   value={query}
                   onChange={event => setQuery(event.target.value)}
@@ -321,7 +321,7 @@ export default function Community() {
 
             {isLoading ? (
               <div className="grid min-h-80 place-items-center">
-                <Loader2 className="h-6 w-6 animate-spin text-violet-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
               </div>
             ) : ordered.length ? (
               <div className="mt-4 space-y-3">
@@ -343,14 +343,14 @@ export default function Community() {
                   return (
                     <article
                       key={item.post.id}
-                      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-violet-200"
+                      className="rounded-xl border border-gray-200 bg-white p-5 transition hover:border-emerald-200"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700">
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-600">
                           {POST_KIND_LABEL[item.post.postType as PostKind]}
                         </span>
                         {item.post.isPinned ? (
-                          <span className="rounded-full bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">
+                          <span className="rounded-full bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white">
                             置顶
                           </span>
                         ) : null}
@@ -359,14 +359,14 @@ export default function Community() {
                             运营精选
                           </span>
                         ) : null}
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-gray-400">
                           {item.authorName || "平台成员"}
                         </span>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-gray-400">
                           {new Date(item.post.createdAt).toLocaleDateString()}
                         </span>
                         {item.post.editedAt ? (
-                          <span className="text-xs text-slate-300">已编辑</span>
+                          <span className="text-xs text-gray-300">已编辑</span>
                         ) : null}
                       </div>
 
@@ -376,10 +376,10 @@ export default function Community() {
                         }
                         className="mt-3 block w-full text-left"
                       >
-                        <h3 className="text-lg font-semibold hover:text-violet-700">
+                        <h3 className="text-lg font-semibold hover:text-emerald-600">
                           {item.post.title}
                         </h3>
-                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">
+                        <p className="mt-2 line-clamp-2 text-sm leading-6 text-gray-600">
                           {item.preview}
                         </p>
                       </button>
@@ -397,14 +397,14 @@ export default function Community() {
                                 })
                               }
                               aria-label={`预览图片 ${attachment.fileName}`}
-                              className="group relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-slate-200"
+                              className="group relative h-20 w-28 shrink-0 overflow-hidden rounded-lg border border-gray-200"
                             >
                               <img
                                 src={attachment.url}
                                 alt={attachment.fileName}
                                 className="h-full w-full object-cover transition group-hover:scale-105"
                               />
-                              <span className="absolute bottom-1 right-1 grid h-5 w-5 place-items-center rounded bg-slate-900/60 text-white">
+                              <span className="absolute bottom-1 right-1 grid h-5 w-5 place-items-center rounded bg-gray-900/60 text-white">
                                 <ImageIcon className="h-3 w-3" />
                               </span>
                             </button>
@@ -415,7 +415,7 @@ export default function Community() {
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap gap-2">
                           {tags.slice(0, 4).map(tag => (
-                            <span key={tag} className="text-xs text-violet-600">
+                            <span key={tag} className="text-xs text-emerald-600">
                               #{tag}
                             </span>
                           ))}
@@ -488,7 +488,7 @@ export default function Community() {
                               "flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:cursor-wait disabled:opacity-50",
                               isLiked
                                 ? "bg-rose-50 text-rose-600"
-                                : "text-slate-400 hover:bg-slate-50"
+                                : "text-gray-400 hover:bg-gray-50"
                             )}
                           >
                             <Heart
@@ -503,7 +503,7 @@ export default function Community() {
                             onClick={() =>
                               setLocation(`/community/${item.post.id}`)
                             }
-                            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-50"
+                            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-gray-400 hover:bg-gray-50"
                           >
                             <MessageCircleMore className="h-3.5 w-3.5" />
                             {item.post.commentCount}
@@ -517,8 +517,8 @@ export default function Community() {
                             className={cn(
                               "flex items-center gap-1 rounded-lg px-2 py-1 text-xs disabled:cursor-wait disabled:opacity-50",
                               isSaved
-                                ? "bg-violet-50 text-violet-700"
-                                : "text-slate-400 hover:bg-slate-50"
+                                ? "bg-emerald-50 text-emerald-600"
+                                : "text-gray-400 hover:bg-gray-50"
                             )}
                           >
                             <Bookmark
@@ -581,10 +581,10 @@ function IconAction({
       className={cn(
         "grid h-7 w-7 place-items-center rounded-lg transition",
         tone === "danger"
-          ? "text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+          ? "text-gray-400 hover:bg-rose-50 hover:text-rose-600"
           : active
-            ? "bg-violet-100 text-violet-700"
-            : "text-slate-400 hover:bg-slate-50 hover:text-violet-700"
+            ? "bg-emerald-100 text-emerald-600"
+            : "text-gray-400 hover:bg-gray-50 hover:text-emerald-600"
       )}
     >
       <Icon className="h-3.5 w-3.5" />
@@ -594,18 +594,18 @@ function IconAction({
 function Tip({ label, text }: { label: string; text: string }) {
   return (
     <div>
-      <p className="font-medium text-slate-800">{label}</p>
-      <p className="mt-1 text-xs leading-5 text-slate-500">{text}</p>
+      <p className="font-medium text-gray-800">{label}</p>
+      <p className="mt-1 text-xs leading-5 text-gray-500">{text}</p>
     </div>
   );
 }
 function Empty() {
   return (
-    <div className="mt-4 grid min-h-80 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white text-center">
+    <div className="mt-4 grid min-h-80 place-items-center rounded-xl border border-dashed border-gray-300 bg-white text-center">
       <div>
-        <Sparkles className="mx-auto h-6 w-6 text-violet-600" />
+        <Sparkles className="mx-auto h-6 w-6 text-emerald-600" />
         <p className="mt-3 font-semibold">还没有匹配的实践内容</p>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-gray-500">
           换一个关键词，或发布第一份工作方法。
         </p>
       </div>

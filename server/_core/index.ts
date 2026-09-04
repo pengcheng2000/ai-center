@@ -69,7 +69,7 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
-    // 数据库就绪后：初始化本地管理员、种子内容与模型治理数据，并重建启用中的每日同步计划。
+    // 数据库就绪后：初始化本地管理员、种子内容与模型治理数据，并重建启用中的资讯调度计划。
     void ensureLocalAdmin();
     void ensurePlatformBootstrap().catch(error => console.warn("[Bootstrap] 平台种子数据初始化失败:", error));
     void ensureGovernanceBootstrap().catch(error => console.warn("[Bootstrap] 模型治理数据初始化失败:", error));

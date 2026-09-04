@@ -745,6 +745,9 @@ describe("daily RSS sync schedule route", () => {
           id: 8,
           name: "AIHOT 全文",
           sourceType: "rss",
+          isEnabled: 1,
+          scheduleEnabled: 0,
+          syncIntervalHours: 24,
           scheduleCronTaskUid: null,
         },
       ],
@@ -753,7 +756,21 @@ describe("daily RSS sync schedule route", () => {
           id: 8,
           name: "AIHOT 全文",
           sourceType: "rss",
+          isEnabled: 1,
+          scheduleEnabled: 1,
+          syncIntervalHours: 24,
           scheduleCronTaskUid: "task_existing",
+        },
+      ],
+      [
+        {
+          id: 8,
+          name: "AIHOT 全文",
+          sourceType: "rss",
+          isEnabled: 1,
+          scheduleEnabled: 1,
+          syncIntervalHours: 24,
+          scheduleCronTaskUid: "task_interval",
         },
       ],
     ];
@@ -816,6 +833,25 @@ describe("daily RSS sync schedule route", () => {
       "task_existing",
       { enable: false },
       ""
+    );
+    await expect(
+      admin.operations.setSourceSyncInterval({
+        sourceId: 8,
+        intervalHours: 4,
+      })
+    ).resolves.toMatchObject({ success: true, intervalHours: 4 });
+    expect(mocks.updateHeartbeatJob).toHaveBeenCalledWith(
+      "task_interval",
+      expect.objectContaining({
+        enable: true,
+        cron: "0 0 1,5,9,13,17,21 * * *",
+      }),
+      ""
+    );
+    expect(updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ syncIntervalHours: 4 }),
+      ])
     );
     const employee = platformRouter.createCaller(ctx("user"));
     await expect(

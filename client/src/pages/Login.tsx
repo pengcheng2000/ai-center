@@ -52,15 +52,15 @@ export default function Login() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f6f6f3] px-4 py-10">
-      <div className="hero-orb -left-24 top-10 h-72 w-72 bg-violet-200/55" />
-      <div className="hero-orb -right-24 bottom-8 h-80 w-80 bg-emerald-100/65" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white px-4 py-10">
+      <div className="hero-orb -left-24 top-10 h-72 w-72 bg-indigo-100/30" />
+      <div className="hero-orb -right-24 bottom-8 h-80 w-80 bg-blue-100/20" />
       <div className="relative w-full max-w-md">
-        <div className="rounded-[28px] border border-white/90 bg-white/88 p-7 shadow-2xl backdrop-blur-xl sm:p-9">
+        <div className="rounded-xl border border-white/90 bg-white/88 p-7 shadow-lg backdrop-blur-xl sm:p-9">
           <div className="mb-8 text-center">
             <BrandWordmark centered className="mb-5" />
-            <h1 className="text-2xl font-semibold tracking-[-0.045em] text-slate-900">欢迎回到你的 AI 工作台</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
+            <h1 className="text-2xl font-semibold tracking-[-0.045em] text-gray-900">欢迎回到你的 AI 工作台</h1>
+            <p className="mt-2 text-sm leading-6 text-gray-500">
               {mode === "login" ? "登录以进入你的学习、资讯与实践工作台" : "注册一个员工账号，开始你的 AI 学习之旅"}
             </p>
           </div>
@@ -111,18 +111,18 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-slate-500">
+          <div className="mt-6 text-center text-sm text-gray-500">
             {mode === "login" ? (
               <>
                 还没有账号？
-                <button type="button" className="ml-1 font-semibold text-violet-700 hover:text-violet-800" onClick={() => { setMode("register"); setError(null); }}>
+                <button type="button" className="ml-1 font-semibold text-indigo-600 hover:text-indigo-700" onClick={() => { setMode("register"); setError(null); }}>
                   注册新账号
                 </button>
               </>
             ) : (
               <>
                 已有账号？
-                <button type="button" className="ml-1 font-semibold text-violet-700 hover:text-violet-800" onClick={() => { setMode("login"); setError(null); }}>
+                <button type="button" className="ml-1 font-semibold text-indigo-600 hover:text-indigo-700" onClick={() => { setMode("login"); setError(null); }}>
                   直接登录
                 </button>
               </>
@@ -130,7 +130,7 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="mt-6 text-center text-xs leading-5 text-slate-400">
+        <p className="mt-6 text-center text-xs leading-5 text-gray-400">
           本平台仅面向企业成员开放。请使用员工账号登录；管理员账号由部署负责人统一维护。
         </p>
       </div>
