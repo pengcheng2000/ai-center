@@ -2,29 +2,389 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import PlatformShell from "@/components/PlatformShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { AppWindow, ArrowLeft, Edit3, ExternalLink, Loader2, Plus, ShieldAlert } from "lucide-react";
+import {
+  AppWindow,
+  ArrowLeft,
+  Edit3,
+  ExternalLink,
+  Loader2,
+  Plus,
+  ShieldAlert,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
-type AppDraft = { id?: number; name: string; description: string; appUrl: string; category: string; icon: string; audience: "all" | "employee" | "admin"; isEnabled: boolean; orderIndex: number };
-const blankApp = (): AppDraft => ({ name: "", description: "", appUrl: "https://", category: "业务工具", icon: "blocks", audience: "employee", isEnabled: true, orderIndex: 10 });
+type AppDraft = {
+  id?: number;
+  name: string;
+  description: string;
+  appUrl: string;
+  category: string;
+  icon: string;
+  audience: "all" | "employee" | "admin";
+  isEnabled: boolean;
+  orderIndex: number;
+};
+const blankApp = (): AppDraft => ({
+  name: "",
+  description: "",
+  appUrl: "https://",
+  category: "业务工具",
+  icon: "blocks",
+  audience: "employee",
+  isEnabled: true,
+  orderIndex: 10,
+});
 
 export default function ApplicationOperations() {
-  const { user, loading } = useAuth(); const [, setLocation] = useLocation(); const utils = trpc.useUtils(); const allowed = user?.role === "admin";
-  const { data, isLoading } = trpc.platform.operations.get.useQuery(undefined, { enabled: Boolean(allowed) }); const [draft, setDraft] = useState<AppDraft | null>(null);
+  const { user, loading } = useAuth();
+  const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
+  const allowed = user?.role === "admin";
+  const { data, isLoading } = trpc.platform.operations.get.useQuery(undefined, {
+    enabled: Boolean(allowed),
+  });
+  const [draft, setDraft] = useState<AppDraft | null>(null);
   const refresh = () => utils.platform.operations.get.invalidate();
-  const addApp = trpc.platform.operations.addEnterpriseApp.useMutation({ onSuccess: () => { toast.success("应用入口已添加"); setDraft(null); refresh(); }, onError: error => toast.error(error.message) });
-  const updateApp = trpc.platform.operations.updateEnterpriseApp.useMutation({ onSuccess: () => { toast.success("应用入口已更新"); setDraft(null); refresh(); }, onError: error => toast.error(error.message) });
-  const toggleApp = trpc.platform.operations.toggleEnterpriseApp.useMutation({ onSuccess: refresh, onError: error => toast.error(error.message) });
-  if (loading || (allowed && isLoading)) return <PlatformShell><div className="grid min-h-[65vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div></PlatformShell>;
-  if (!allowed || !data) return <PlatformShell><main className="mx-auto grid min-h-[65vh] max-w-xl place-items-center px-5 text-center"><div><ShieldAlert className="mx-auto h-8 w-8 text-rose-600" /><h1 className="mt-5 font-serif text-3xl font-semibold">此区域仅对运营管理员开放</h1><Button onClick={() => setLocation("/")} className="mt-6">返回员工端</Button></div></main></PlatformShell>;
-  const save = () => { if (!draft) return; if (draft.id) updateApp.mutate({ ...draft, id: draft.id }); else { const { id: _id, ...payload } = draft; addApp.mutate(payload); } };
-  return <PlatformShell><main className="mx-auto max-w-[1300px] px-5 py-9 lg:px-10"><button onClick={() => setLocation("/operations")} className="flex items-center text-sm font-medium text-slate-500 hover:text-violet-700"><ArrowLeft className="mr-2 h-4 w-4" />返回运营管理</button><div className="mt-6 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="section-kicker">APPLICATION DIRECTORY / ADMIN</p><h1 className="mt-2 font-serif text-4xl font-semibold">应用中心管理</h1><p className="mt-3 max-w-2xl text-slate-500">维护面向企业成员的可信工具入口。仅记录应用信息和跳转地址，不保存任何第三方系统账号或密钥。</p></div><Button onClick={() => setDraft(blankApp())} className="rounded-full"><Plus className="mr-2 h-4 w-4" />新增应用入口</Button></div><section className="mt-7 overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[860px] text-left text-sm"><thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400"><tr><th className="px-5 py-4">应用</th><th className="px-5 py-4">分类 / 受众</th><th className="px-5 py-4">入口地址</th><th className="px-5 py-4">排序</th><th className="px-5 py-4">启用</th><th className="px-5 py-4"></th></tr></thead><tbody>{data.apps.map(app => <tr key={app.id} className="border-b border-slate-50 last:border-0"><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-lg bg-violet-50 text-violet-700"><AppWindow className="h-4 w-4" /></span><div><p className="font-semibold">{app.name}</p><p className="mt-1 max-w-72 truncate text-xs text-slate-500">{app.description}</p></div></div></td><td className="px-5 py-4"><Badge variant="secondary">{app.category}</Badge><p className="mt-1 text-xs text-slate-500">{app.audience === "all" ? "全部访客" : app.audience === "employee" ? "企业员工" : "管理员"}</p></td><td className="px-5 py-4"><a href={app.appUrl} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-56 items-center truncate text-violet-700 hover:underline">{app.appUrl}<ExternalLink className="ml-1 h-3.5 w-3.5 shrink-0" /></a></td><td className="px-5 py-4">{app.orderIndex}</td><td className="px-5 py-4"><Switch checked={Boolean(app.isEnabled)} onCheckedChange={checked => toggleApp.mutate({ id: app.id, isEnabled: checked })} /></td><td className="px-5 py-4 text-right"><Button onClick={() => setDraft({ id: app.id, name: app.name, description: app.description, appUrl: app.appUrl, category: app.category, icon: app.icon, audience: app.audience, isEnabled: Boolean(app.isEnabled), orderIndex: app.orderIndex })} variant="ghost" size="sm" className="text-violet-700"><Edit3 className="mr-1.5 h-3.5 w-3.5" />编辑</Button></td></tr>)}{!data.apps.length && <tr><td colSpan={6} className="px-5 py-12 text-center text-slate-500">尚未添加应用入口。可添加公司 Agent 平台、专利小匠等已获批准的企业工具。</td></tr>}</tbody></table></div></section><Dialog open={Boolean(draft)} onOpenChange={open => !open && setDraft(null)}><DialogContent className="sm:max-w-[600px]"><DialogHeader><DialogTitle>{draft?.id ? "编辑应用入口" : "新增应用入口"}</DialogTitle></DialogHeader>{draft && <div className="grid gap-4 py-2"><div className="grid gap-4 sm:grid-cols-2"><Field label="应用名称"><Input value={draft.name} onChange={event => setDraft(prev => prev && ({ ...prev, name: event.target.value }))} placeholder="例如：公司 Agent 平台" /></Field><Field label="分类"><Input value={draft.category} onChange={event => setDraft(prev => prev && ({ ...prev, category: event.target.value }))} placeholder="例如：智能助手" /></Field></div><Field label="应用说明"><Textarea value={draft.description} onChange={event => setDraft(prev => prev && ({ ...prev, description: event.target.value }))} placeholder="说明应用适用范围和使用边界。" /></Field><Field label="应用入口 URL"><Input value={draft.appUrl} onChange={event => setDraft(prev => prev && ({ ...prev, appUrl: event.target.value }))} placeholder="https://" /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="员工可见范围"><select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={draft.audience} onChange={event => setDraft(prev => prev && ({ ...prev, audience: event.target.value as AppDraft["audience"] }))}><option value="employee">企业员工</option><option value="all">全部访客</option><option value="admin">仅管理员</option></select></Field><Field label="排序"><Input type="number" min="0" value={draft.orderIndex} onChange={event => setDraft(prev => prev && ({ ...prev, orderIndex: Number(event.target.value) }))} /></Field></div><label className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm font-medium">启用入口<Switch checked={draft.isEnabled} onCheckedChange={checked => setDraft(prev => prev && ({ ...prev, isEnabled: checked }))} /></label></div>}<DialogFooter><Button variant="outline" onClick={() => setDraft(null)}>取消</Button><Button disabled={!draft?.name || !draft.description || !draft.appUrl || !draft.category || addApp.isPending || updateApp.isPending} onClick={save}>保存应用</Button></DialogFooter></DialogContent></Dialog></main></PlatformShell>;
+  const addApp = trpc.platform.operations.addEnterpriseApp.useMutation({
+    onSuccess: () => {
+      toast.success("应用入口已添加");
+      setDraft(null);
+      refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const updateApp = trpc.platform.operations.updateEnterpriseApp.useMutation({
+    onSuccess: () => {
+      toast.success("应用入口已更新");
+      setDraft(null);
+      refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const toggleApp = trpc.platform.operations.toggleEnterpriseApp.useMutation({
+    onSuccess: refresh,
+    onError: error => toast.error(error.message),
+  });
+  if (loading || (allowed && isLoading))
+    return (
+      <PlatformShell>
+        <div className="grid min-h-[65vh] place-items-center">
+          <Loader2 className="h-6 w-6 animate-spin text-violet-600" />
+        </div>
+      </PlatformShell>
+    );
+  if (!allowed || !data)
+    return (
+      <PlatformShell>
+        <main className="mx-auto grid min-h-[65vh] max-w-xl place-items-center px-5 text-center">
+          <div>
+            <ShieldAlert className="mx-auto h-8 w-8 text-rose-600" />
+            <h1 className="mt-5 font-serif text-3xl font-semibold">
+              此区域仅对运营管理员开放
+            </h1>
+            <Button onClick={() => setLocation("/")} className="mt-6">
+              返回员工端
+            </Button>
+          </div>
+        </main>
+      </PlatformShell>
+    );
+  const save = () => {
+    if (!draft) return;
+    if (draft.id) updateApp.mutate({ ...draft, id: draft.id });
+    else {
+      const { id: _id, ...payload } = draft;
+      addApp.mutate(payload);
+    }
+  };
+  return (
+    <PlatformShell>
+      <main className="mx-auto max-w-[1300px] px-5 py-9 lg:px-10">
+        <button
+          onClick={() => setLocation("/operations")}
+          className="flex items-center text-sm font-medium text-slate-500 hover:text-violet-700"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          返回运营管理
+        </button>
+        <div className="mt-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <p className="section-kicker">APPLICATION DIRECTORY / ADMIN</p>
+            <h1 className="mt-2 font-serif text-4xl font-semibold">
+              应用中心管理
+            </h1>
+            <p className="mt-3 max-w-2xl text-slate-500">
+              维护面向企业成员的可信工具入口。仅记录应用信息和跳转地址，不保存任何第三方系统账号或密钥。
+            </p>
+          </div>
+          <Button onClick={() => setDraft(blankApp())} className="rounded-full">
+            <Plus className="mr-2 h-4 w-4" />
+            新增应用入口
+          </Button>
+        </div>
+        <section className="mt-7 overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-sm">
+              <thead className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="px-5 py-4">应用</th>
+                  <th className="px-5 py-4">分类 / 受众</th>
+                  <th className="px-5 py-4">入口地址</th>
+                  <th className="px-5 py-4">排序</th>
+                  <th className="px-5 py-4">启用</th>
+                  <th className="px-5 py-4"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.apps.map(app => (
+                  <tr
+                    key={app.id}
+                    className="border-b border-slate-50 last:border-0"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-9 w-9 place-items-center rounded-lg bg-violet-50 text-violet-700">
+                          <AppWindow className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p className="font-semibold">{app.name}</p>
+                          <p className="mt-1 max-w-72 truncate text-xs text-slate-500">
+                            {app.description}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <Badge variant="secondary">{app.category}</Badge>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {app.audience === "all"
+                          ? "全部访客"
+                          : app.audience === "employee"
+                            ? "企业员工"
+                            : "管理员"}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4">
+                      <a
+                        href={app.appUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex max-w-56 items-center truncate text-violet-700 hover:underline"
+                      >
+                        {app.appUrl}
+                        <ExternalLink className="ml-1 h-3.5 w-3.5 shrink-0" />
+                      </a>
+                    </td>
+                    <td className="px-5 py-4">{app.orderIndex}</td>
+                    <td className="px-5 py-4">
+                      <Switch
+                        checked={Boolean(app.isEnabled)}
+                        onCheckedChange={checked =>
+                          toggleApp.mutate({ id: app.id, isEnabled: checked })
+                        }
+                      />
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <Button
+                        onClick={() =>
+                          setDraft({
+                            id: app.id,
+                            name: app.name,
+                            description: app.description,
+                            appUrl: app.appUrl,
+                            category: app.category,
+                            icon: app.icon,
+                            audience: app.audience,
+                            isEnabled: Boolean(app.isEnabled),
+                            orderIndex: app.orderIndex,
+                          })
+                        }
+                        variant="ghost"
+                        size="sm"
+                        className="text-violet-700"
+                      >
+                        <Edit3 className="mr-1.5 h-3.5 w-3.5" />
+                        编辑
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+                {!data.apps.length && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-5 py-12 text-center text-slate-500"
+                    >
+                      尚未添加应用入口。可添加公司 Agent
+                      平台、专利小匠等已获批准的企业工具。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <Dialog
+          open={Boolean(draft)}
+          onOpenChange={open => !open && setDraft(null)}
+        >
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>
+                {draft?.id ? "编辑应用入口" : "新增应用入口"}
+              </DialogTitle>
+              <DialogDescription>
+                维护企业成员可访问的应用名称、入口、受众范围与展示顺序。
+              </DialogDescription>
+            </DialogHeader>
+            {draft && (
+              <div className="grid gap-4 py-2">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="应用名称">
+                    <Input
+                      value={draft.name}
+                      onChange={event =>
+                        setDraft(
+                          prev => prev && { ...prev, name: event.target.value }
+                        )
+                      }
+                      placeholder="例如：公司 Agent 平台"
+                    />
+                  </Field>
+                  <Field label="分类">
+                    <Input
+                      value={draft.category}
+                      onChange={event =>
+                        setDraft(
+                          prev =>
+                            prev && { ...prev, category: event.target.value }
+                        )
+                      }
+                      placeholder="例如：智能助手"
+                    />
+                  </Field>
+                </div>
+                <Field label="应用说明">
+                  <Textarea
+                    value={draft.description}
+                    onChange={event =>
+                      setDraft(
+                        prev =>
+                          prev && { ...prev, description: event.target.value }
+                      )
+                    }
+                    placeholder="说明应用适用范围和使用边界。"
+                  />
+                </Field>
+                <Field label="应用入口 URL">
+                  <Input
+                    value={draft.appUrl}
+                    onChange={event =>
+                      setDraft(
+                        prev => prev && { ...prev, appUrl: event.target.value }
+                      )
+                    }
+                    placeholder="https://"
+                  />
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="员工可见范围">
+                    <select
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      value={draft.audience}
+                      onChange={event =>
+                        setDraft(
+                          prev =>
+                            prev && {
+                              ...prev,
+                              audience: event.target
+                                .value as AppDraft["audience"],
+                            }
+                        )
+                      }
+                    >
+                      <option value="employee">企业员工</option>
+                      <option value="all">全部访客</option>
+                      <option value="admin">仅管理员</option>
+                    </select>
+                  </Field>
+                  <Field label="排序">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={draft.orderIndex}
+                      onChange={event =>
+                        setDraft(
+                          prev =>
+                            prev && {
+                              ...prev,
+                              orderIndex: Number(event.target.value),
+                            }
+                        )
+                      }
+                    />
+                  </Field>
+                </div>
+                <label className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3 text-sm font-medium">
+                  启用入口
+                  <Switch
+                    checked={draft.isEnabled}
+                    onCheckedChange={checked =>
+                      setDraft(prev => prev && { ...prev, isEnabled: checked })
+                    }
+                  />
+                </label>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDraft(null)}>
+                取消
+              </Button>
+              <Button
+                disabled={
+                  !draft?.name ||
+                  !draft.description ||
+                  !draft.appUrl ||
+                  !draft.category ||
+                  addApp.isPending ||
+                  updateApp.isPending
+                }
+                onClick={save}
+              >
+                保存应用
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </main>
+    </PlatformShell>
+  );
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="grid gap-2"><label className="text-sm font-medium">{label}</label>{children}</div>; }
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-2">
+      <label className="text-sm font-medium">{label}</label>
+      {children}
+    </div>
+  );
+}

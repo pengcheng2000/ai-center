@@ -18,6 +18,7 @@ export type PdfReaderProps = {
   src: string;
   annotations: Annotation[];
   resumePage: number | null;
+  initialPercent?: number;
   onProgress: (payload: { page: number; totalPages: number }) => void;
 };
 
@@ -67,12 +68,12 @@ function PageCanvas({ doc, page, scale, onRendered, onError }: { doc: PdfDoc; pa
   return <canvas ref={canvasRef} className="block rounded-lg shadow-2xl shadow-black/40" style={{ width: size?.w, height: size?.h, visibility: size ? "visible" : "hidden" }} />;
 }
 
-export default function PdfReader({ materialId, src, annotations, resumePage, onProgress }: PdfReaderProps) {
+export default function PdfReader({ materialId, src, annotations, resumePage, initialPercent = 0, onProgress }: PdfReaderProps) {
   const docRef = useRef<PdfDoc | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const progressRef = useRef(0);
+  const progressRef = useRef(Math.max(0, Math.min(100, initialPercent)));
   // 父组件每次渲染都会传入新的 inline onProgress；经 ref 转发保持 reportPage 身份稳定，
   // 避免键盘翻页监听与 IntersectionObserver effect 随父渲染反复销毁重建（参见 VideoPlayer 的同类注释）。
   const onProgressRef = useRef(onProgress);
@@ -101,9 +102,11 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
   const deleteAnnotation = trpc.platform.learning.deleteAnnotation.useMutation({ onSuccess: () => { void utils.platform.learning.courseExperience.invalidate(); } });
 
   const reportPage = useCallback((next: number, total: number) => {
-    if (next === progressRef.current || total <= 0 || next < 1 || next > total) return;
-    progressRef.current = next;
+    if (total <= 0 || next < 1 || next > total) return;
     setPage(next);
+    const nextPercent = pdfPercent(next, total);
+    if (nextPercent <= progressRef.current) return;
+    progressRef.current = nextPercent;
     onProgressRef.current({ page: next, totalPages: total });
   }, []);
 
@@ -353,7 +356,7 @@ export default function PdfReader({ materialId, src, annotations, resumePage, on
     </button>
   </div>;
 
-  return <div className={cn(immersive ? "fixed inset-0 z-[60] flex flex-col gap-3 bg-slate-900 p-3" : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]")}>
+  return <div className={cn(immersive ? "fixed inset-0 z-40 flex flex-col gap-3 bg-slate-900 p-3" : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]")}>
     <div ref={containerRef} className={cn("flex min-h-0 flex-1 flex-col", immersive ? "p-3" : "")}>
       {/* 工具栏：普通模式常驻在阅读区上方；沉浸模式悬浮居中、自动隐藏 */}
       {immersive ? <div className={cn("pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 transition-opacity duration-300", toolbarVisible ? "opacity-100" : "opacity-0")}>{toolbar}</div> : <div className="mb-3">{toolbar}</div>}

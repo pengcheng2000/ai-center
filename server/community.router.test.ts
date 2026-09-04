@@ -166,11 +166,12 @@ describe("社区读取路由", () => {
       [{ post, authorName: "作者" }],
       [{ id: 5, postId: 4, fileKey: "community/7/a.png", fileName: "a.png", mimeType: "image/png", sizeBytes: 10 }],
       [{ comment: { id: 9, authorId: OTHER_ID, postId: 4, content: "补充", createdAt: new Date() }, authorName: "同事" }],
+      [{ id: 12 }],
     ]);
     mocks.getDb.mockResolvedValue(db);
     mocks.storageGetSignedUrl.mockResolvedValue("/api/files/a.png?sig=abc");
     const detail = await platformRouter.createCaller(ctx("user")).community.detail({ postId: 4 });
-    expect(detail).toMatchObject({ canEdit: true, canModerate: false });
+    expect(detail).toMatchObject({ canEdit: true, canModerate: false, liked: true });
     expect(detail?.markdown).toContain("![图](/api/files/a.png?sig=abc)");
     expect(detail?.comments[0]).toMatchObject({ canDelete: false });
   });

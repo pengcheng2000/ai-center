@@ -6,6 +6,9 @@ import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import "./index.css";
+import { installAnalytics } from "./lib/analytics";
+
+installAnalytics(import.meta.env);
 
 const queryClient = new QueryClient();
 
@@ -16,9 +19,11 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
 
   if (!isUnauthorized) return;
+  if (window.location.pathname === "/login") return;
 
-  // 本地认证：未登录时跳转到登录页，由登录页完成会话建立。
-  window.location.href = "/login";
+  // 会话过期时保留当前站内地址，重新登录后可回到原页面。
+  const next = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.replace(`/login?next=${encodeURIComponent(next)}`);
 };
 
 queryClient.getQueryCache().subscribe(event => {

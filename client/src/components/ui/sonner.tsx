@@ -8,6 +8,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      toastOptions={{
+        classNames: {
+          toast: "!rounded-2xl !border-slate-200/90 !shadow-lg",
+          title: "!font-semibold !tracking-[-0.01em]",
+          description: "!text-slate-500",
+        },
+      }}
       style={
         {
           "--normal-bg": "var(--popover)",

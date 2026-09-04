@@ -2,61 +2,976 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import PlatformShell from "@/components/PlatformShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { Activity, ArrowLeft, Bot, CircleAlert, Database, Gauge, KeyRound, Loader2, Network, Plus, Route, ServerCog, ShieldCheck } from "lucide-react";
+import {
+  Activity,
+  ArrowLeft,
+  Bot,
+  CircleAlert,
+  Database,
+  Gauge,
+  KeyRound,
+  Loader2,
+  Network,
+  Plus,
+  Route,
+  ServerCog,
+  ShieldCheck,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
-type ProviderDraft = { id?: number; name: string; providerType: "openai" | "anthropic" | "azure_openai" | "custom"; baseUrl: string; keyAlias: string; healthStatus: "unknown" | "healthy" | "degraded" | "disabled"; isEnabled: boolean; orderIndex: number };
-type ModelDraft = { id?: number; providerId: number; modelId: string; displayName: string; capabilityTags: string; scenarioTags: string; contextWindow: number; isDefault: boolean; isEnabled: boolean; orderIndex: number };
-type PolicyDraft = { id?: number; name: string; scenario: "default" | "audit" | "learning" | "content"; primaryModelId: string; fallbackModelIds: string; isEnabled: boolean };
-const blankProvider = (): ProviderDraft => ({ name: "", providerType: "custom", baseUrl: "https://", keyAlias: "", healthStatus: "unknown", isEnabled: true, orderIndex: 10 });
-const blankModel = (): ModelDraft => ({ providerId: 0, modelId: "", displayName: "", capabilityTags: "", scenarioTags: "", contextWindow: 128000, isDefault: false, isEnabled: true, orderIndex: 10 });
-const blankPolicy = (): PolicyDraft => ({ name: "", scenario: "default", primaryModelId: "", fallbackModelIds: "", isEnabled: true });
-const list = (value: string) => value.split(/[，,]/).map(item => item.trim()).filter(Boolean);
-const ids = (value: string) => value.split(/[，,]/).map(item => Number(item.trim())).filter(Number.isInteger).filter(item => item > 0);
+type ProviderDraft = {
+  id?: number;
+  name: string;
+  providerType: "openai" | "anthropic" | "azure_openai" | "custom";
+  baseUrl: string;
+  keyAlias: string;
+  healthStatus: "unknown" | "healthy" | "degraded" | "disabled";
+  isEnabled: boolean;
+  orderIndex: number;
+};
+type ModelDraft = {
+  id?: number;
+  providerId: number;
+  modelId: string;
+  displayName: string;
+  capabilityTags: string;
+  scenarioTags: string;
+  contextWindow: number;
+  isDefault: boolean;
+  isEnabled: boolean;
+  orderIndex: number;
+};
+type PolicyDraft = {
+  id?: number;
+  name: string;
+  scenario: "default" | "audit" | "learning" | "content";
+  primaryModelId: string;
+  fallbackModelIds: string;
+  isEnabled: boolean;
+};
+const blankProvider = (): ProviderDraft => ({
+  name: "",
+  providerType: "custom",
+  baseUrl: "https://",
+  keyAlias: "",
+  healthStatus: "unknown",
+  isEnabled: true,
+  orderIndex: 10,
+});
+const blankModel = (): ModelDraft => ({
+  providerId: 0,
+  modelId: "",
+  displayName: "",
+  capabilityTags: "",
+  scenarioTags: "",
+  contextWindow: 128000,
+  isDefault: false,
+  isEnabled: true,
+  orderIndex: 10,
+});
+const blankPolicy = (): PolicyDraft => ({
+  name: "",
+  scenario: "default",
+  primaryModelId: "",
+  fallbackModelIds: "",
+  isEnabled: true,
+});
+const list = (value: string) =>
+  value
+    .split(/[，,]/)
+    .map(item => item.trim())
+    .filter(Boolean);
+const ids = (value: string) =>
+  value
+    .split(/[，,]/)
+    .map(item => Number(item.trim()))
+    .filter(Number.isInteger)
+    .filter(item => item > 0);
 
 export default function GovernanceCenter() {
-  const { user, loading } = useAuth(); const [, setLocation] = useLocation(); const utils = trpc.useUtils();
-  const allowed = user?.role === "admin"; const { data, isLoading } = trpc.platform.operations.get.useQuery(undefined, { enabled: allowed });
-  const [provider, setProvider] = useState<ProviderDraft | null>(null); const [model, setModel] = useState<ModelDraft | null>(null); const [policy, setPolicy] = useState<PolicyDraft | null>(null);
+  const { user, loading } = useAuth();
+  const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
+  const allowed = user?.role === "admin";
+  const { data, isLoading } = trpc.platform.operations.get.useQuery(undefined, {
+    enabled: allowed,
+  });
+  const [provider, setProvider] = useState<ProviderDraft | null>(null);
+  const [model, setModel] = useState<ModelDraft | null>(null);
+  const [policy, setPolicy] = useState<PolicyDraft | null>(null);
   const refresh = () => utils.platform.operations.get.invalidate();
-  const addProvider = trpc.platform.operations.addProvider.useMutation({ onSuccess: () => { toast.success("模型供应商已保存"); setProvider(null); refresh(); }, onError: error => toast.error(error.message) });
-  const updateProvider = trpc.platform.operations.updateProvider.useMutation({ onSuccess: () => { toast.success("供应商配置已更新"); setProvider(null); refresh(); }, onError: error => toast.error(error.message) });
-  const toggleProvider = trpc.platform.operations.toggleProvider.useMutation({ onSuccess: refresh });
-  const addModel = trpc.platform.operations.addModel.useMutation({ onSuccess: () => { toast.success("模型已加入目录"); setModel(null); refresh(); }, onError: error => toast.error(error.message) });
-  const updateModel = trpc.platform.operations.updateModel.useMutation({ onSuccess: () => { toast.success("模型配置已更新"); setModel(null); refresh(); }, onError: error => toast.error(error.message) });
-  const savePolicy = trpc.platform.operations.savePolicy.useMutation({ onSuccess: () => { toast.success("场景策略已保存"); setPolicy(null); refresh(); }, onError: error => toast.error(error.message) });
-  if (loading || (allowed && isLoading)) return <PlatformShell><Loading /></PlatformShell>;
-  if (!allowed || !data) return <PlatformShell><Denied onBack={() => setLocation("/")} /></PlatformShell>;
-  const activeProviders = data.providers.filter(item => item.isEnabled).length; const activeModels = data.models.filter(item => item.model.isEnabled).length; const staleSources = data.sources.filter(item => !item.isEnabled || !item.lastProcessedAt).length;
-  const saveProvider = () => { if (!provider) return; if (provider.id) updateProvider.mutate({ ...provider, id: provider.id }); else { const { id: _id, ...payload } = provider; addProvider.mutate(payload); } };
-  const saveModel = () => { if (!model) return; const payload = { ...model, capabilityTags: list(model.capabilityTags), scenarioTags: list(model.scenarioTags) }; model.id ? updateModel.mutate({ ...payload, id: model.id }) : addModel.mutate(payload); };
-  const savePolicyDraft = () => policy && savePolicy.mutate({ id: policy.id, name: policy.name, scenario: policy.scenario, primaryModelId: policy.primaryModelId ? Number(policy.primaryModelId) : null, fallbackModelIds: ids(policy.fallbackModelIds), isEnabled: policy.isEnabled });
-  return <PlatformShell><main className="mx-auto max-w-[1500px] px-5 py-8 lg:px-10"><button onClick={() => setLocation("/operations")} className="flex items-center text-sm font-medium text-slate-500 hover:text-violet-700"><ArrowLeft className="mr-2 h-4 w-4" />返回运营管理</button><div className="mt-6 flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="section-kicker">GOVERNANCE / MODEL & RESOURCE CONTROL</p><h1 className="mt-2 font-serif text-4xl font-semibold">模型与资源治理</h1><p className="mt-3 max-w-3xl text-slate-500">将供应商、模型、调用策略与内容资源纳入同一运营台。密钥仅显示安全别名；实际 API Key 应在项目安全设置中托管。</p></div><Badge className="self-start rounded-full bg-slate-950 px-4 py-2 text-white"><ShieldCheck className="mr-2 h-4 w-4" />管理员受控配置</Badge></div>
-  <section className="mt-7 grid gap-4 md:grid-cols-4"><Metric icon={Network} label="启用供应商" value={activeProviders} note={`${data.providers.length} 个已登记来源`} /><Metric icon={Bot} label="启用模型" value={activeModels} note="按能力与场景管理" /><Metric icon={Route} label="场景策略" value={data.policies.filter(item => item.isEnabled).length} note="默认、审核、学习、内容" /><Metric icon={CircleAlert} label="资源风险提示" value={staleSources} note="停用或未处理的资讯源" /></section>
-  <section className="mt-7 grid gap-7 xl:grid-cols-[1.05fr_.95fr]"><div className="space-y-7"><Panel icon={ServerCog} title="LLM 供应商" description="登记 Base URL、受管密钥别名、健康状态与启停。业务数据不会存储明文 API Key。" action={<Button onClick={() => setProvider(blankProvider())} className="rounded-full"><Plus className="mr-2 h-4 w-4" />新增供应商</Button>}><div className="mt-5 space-y-3">{data.providers.map(item => <article key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4"><div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{item.name}</h3><Badge variant="secondary">{item.providerType}</Badge><Health status={item.healthStatus} /></div><p className="mt-2 text-xs text-slate-500">{item.baseUrl} · 密钥引用：<strong>{item.keyAlias}</strong></p></div><Switch checked={Boolean(item.isEnabled)} onCheckedChange={checked => toggleProvider.mutate({ id: item.id, isEnabled: checked })} /></div><Button onClick={() => setProvider({ id: item.id, name: item.name, providerType: item.providerType, baseUrl: item.baseUrl, keyAlias: item.keyAlias, healthStatus: item.healthStatus, isEnabled: Boolean(item.isEnabled), orderIndex: item.orderIndex })} variant="ghost" size="sm" className="mt-3 text-violet-700">维护配置</Button></article>)}</div></Panel>
-  <Panel icon={Bot} title="模型目录" description="按模型能力、适用场景、上下文与默认顺序维护可调用的模型清单。" action={<Button onClick={() => setModel({ ...blankModel(), providerId: data.providers[0]?.id || 0 })} variant="outline" className="rounded-full"><Plus className="mr-2 h-4 w-4" />新增模型</Button>}><div className="mt-5 grid gap-3 md:grid-cols-2">{data.models.map(({ model: item, providerName }) => <article key={item.id} className="rounded-2xl border border-slate-100 p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{item.displayName}</p><p className="mt-1 text-xs text-slate-400">{providerName || "未关联供应商"} · {item.modelId}</p></div>{item.isDefault ? <Badge className="bg-violet-100 text-violet-700">默认</Badge> : null}</div><p className="mt-3 text-xs leading-5 text-slate-500">能力：{(item.capabilityTags as string[]).join("、") || "未标注"}<br />场景：{(item.scenarioTags as string[]).join("、") || "未标注"}</p><Button onClick={() => setModel({ id: item.id, providerId: item.providerId, modelId: item.modelId, displayName: item.displayName, capabilityTags: (item.capabilityTags as string[]).join("，"), scenarioTags: (item.scenarioTags as string[]).join("，"), contextWindow: item.contextWindow, isDefault: Boolean(item.isDefault), isEnabled: Boolean(item.isEnabled), orderIndex: item.orderIndex })} variant="ghost" size="sm" className="mt-3 text-violet-700">维护模型</Button></article>)}</div></Panel></div>
-  <div className="space-y-7"><Panel icon={Route} title="场景路由策略" description="为审核、学习、内容等场景指定主模型与降级顺序。非托管供应商需先完成安全网关接入。" action={<Button onClick={() => setPolicy(blankPolicy())} variant="outline" className="rounded-full"><Plus className="mr-2 h-4 w-4" />新增策略</Button>}><div className="mt-5 space-y-3">{data.policies.map(item => <article key={item.id} className="rounded-2xl bg-slate-950 p-4 text-white"><div className="flex items-center justify-between"><div><p className="font-semibold">{item.name}</p><p className="mt-1 text-xs text-slate-300">场景：{item.scenario} · 主模型 ID：{item.primaryModelId || "未指定"}</p></div><Badge className={item.isEnabled ? "bg-emerald-400/15 text-emerald-300" : "bg-white/10 text-slate-300"}>{item.isEnabled ? "运行中" : "已停用"}</Badge></div><Button onClick={() => setPolicy({ id: item.id, name: item.name, scenario: item.scenario, primaryModelId: item.primaryModelId ? String(item.primaryModelId) : "", fallbackModelIds: (item.fallbackModelIds as number[]).join("，"), isEnabled: Boolean(item.isEnabled) })} variant="secondary" size="sm" className="mt-4 bg-white text-slate-900 hover:bg-violet-50">维护策略</Button></article>)}</div></Panel>
-  <Panel icon={Database} title="资源可持续性检查" description="将资源状态前置，避免课程、资讯源或模型在长期运营中失效。"><div className="mt-5 space-y-3"><Resource label="资讯源" value={`${data.sources.filter(item => item.isEnabled).length}/${data.sources.length} 启用`} note={`${staleSources} 个需要检查处理状态或启停`} /><Resource label="学习路径" value={`${data.paths.filter(item => item.lifecycleStatus === "published").length}/${data.paths.length} 已发布`} note={`${data.paths.filter(item => item.lifecycleStatus !== "published").length} 个草稿或已归档，建议在内容运营中维护`} /><Resource label="课程资源" value={`${data.courses.filter(item => Boolean(item.resourceUrl)).length}/${data.courses.length} 已关联链接`} note="建议为课程建立责任人、复审日期与失效链接检测" /><Resource label="审核队列" value={`${data.metrics.pending} 待处置`} note="AI 审核仅作预审，最终发布决策必须保留人工记录" /></div></Panel>
-  <Panel icon={Activity} title="企业实践主题" description="主题关注、精选实践和讨论权限用于沉淀高价值经验，而非追逐公开社交流量。"><div className="mt-5 flex flex-wrap gap-2">{data.topics.map(topic => <Badge key={topic.id} className="rounded-full bg-violet-50 px-3 py-2 text-violet-700">{topic.name}{topic.isFeatured ? " · 精选" : ""}</Badge>)}</div><Button onClick={() => setLocation("/community")} variant="ghost" className="mt-4 px-0 text-violet-700">前往社区查看主题流</Button></Panel></div></section>
-  <ProviderDialog draft={provider} setDraft={setProvider} onSave={saveProvider} busy={addProvider.isPending || updateProvider.isPending} />
-  <ModelDialog draft={model} setDraft={setModel} providers={data.providers} onSave={saveModel} busy={addModel.isPending || updateModel.isPending} />
-  <PolicyDialog draft={policy} setDraft={setPolicy} models={data.models.map(item => item.model)} onSave={savePolicyDraft} busy={savePolicy.isPending} />
-  </main></PlatformShell>;
+  const addProvider = trpc.platform.operations.addProvider.useMutation({
+    onSuccess: () => {
+      toast.success("模型供应商已保存");
+      setProvider(null);
+      refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const updateProvider = trpc.platform.operations.updateProvider.useMutation({
+    onSuccess: () => {
+      toast.success("供应商配置已更新");
+      setProvider(null);
+      refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const toggleProvider = trpc.platform.operations.toggleProvider.useMutation({
+    onSuccess: refresh,
+  });
+  const addModel = trpc.platform.operations.addModel.useMutation({
+    onSuccess: () => {
+      toast.success("模型已加入目录");
+      setModel(null);
+      refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const updateModel = trpc.platform.operations.updateModel.useMutation({
+    onSuccess: () => {
+      toast.success("模型配置已更新");
+      setModel(null);
+      refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const savePolicy = trpc.platform.operations.savePolicy.useMutation({
+    onSuccess: () => {
+      toast.success("场景策略已保存");
+      setPolicy(null);
+      refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  if (loading || (allowed && isLoading))
+    return (
+      <PlatformShell>
+        <Loading />
+      </PlatformShell>
+    );
+  if (!allowed || !data)
+    return (
+      <PlatformShell>
+        <Denied onBack={() => setLocation("/")} />
+      </PlatformShell>
+    );
+  const activeProviders = data.providers.filter(item => item.isEnabled).length;
+  const activeModels = data.models.filter(item => item.model.isEnabled).length;
+  const staleSources = data.sources.filter(
+    item => !item.isEnabled || !item.lastProcessedAt
+  ).length;
+  const saveProvider = () => {
+    if (!provider) return;
+    if (provider.id) updateProvider.mutate({ ...provider, id: provider.id });
+    else {
+      const { id: _id, ...payload } = provider;
+      addProvider.mutate(payload);
+    }
+  };
+  const saveModel = () => {
+    if (!model) return;
+    const payload = {
+      ...model,
+      capabilityTags: list(model.capabilityTags),
+      scenarioTags: list(model.scenarioTags),
+    };
+    model.id
+      ? updateModel.mutate({ ...payload, id: model.id })
+      : addModel.mutate(payload);
+  };
+  const savePolicyDraft = () =>
+    policy &&
+    savePolicy.mutate({
+      id: policy.id,
+      name: policy.name,
+      scenario: policy.scenario,
+      primaryModelId: policy.primaryModelId
+        ? Number(policy.primaryModelId)
+        : null,
+      fallbackModelIds: ids(policy.fallbackModelIds),
+      isEnabled: policy.isEnabled,
+    });
+  return (
+    <PlatformShell>
+      <main className="mx-auto max-w-[1500px] px-5 py-8 lg:px-10">
+        <button
+          onClick={() => setLocation("/operations")}
+          className="flex items-center text-sm font-medium text-slate-500 hover:text-violet-700"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          返回运营管理
+        </button>
+        <div className="mt-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <p className="section-kicker">
+              GOVERNANCE / MODEL & RESOURCE CONTROL
+            </p>
+            <h1 className="mt-2 font-serif text-4xl font-semibold">
+              模型与资源治理
+            </h1>
+            <p className="mt-3 max-w-3xl text-slate-500">
+              将供应商、模型、调用策略与内容资源纳入同一运营台。密钥仅显示安全别名；实际
+              API Key 应在项目安全设置中托管。
+            </p>
+          </div>
+          <Badge className="self-start rounded-full bg-slate-950 px-4 py-2 text-white">
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            管理员受控配置
+          </Badge>
+        </div>
+        <section className="mt-7 grid gap-4 md:grid-cols-4">
+          <Metric
+            icon={Network}
+            label="启用供应商"
+            value={activeProviders}
+            note={`${data.providers.length} 个已登记来源`}
+          />
+          <Metric
+            icon={Bot}
+            label="启用模型"
+            value={activeModels}
+            note="按能力与场景管理"
+          />
+          <Metric
+            icon={Route}
+            label="场景策略"
+            value={data.policies.filter(item => item.isEnabled).length}
+            note="默认、审核、学习、内容"
+          />
+          <Metric
+            icon={CircleAlert}
+            label="资源风险提示"
+            value={staleSources}
+            note="停用或未处理的资讯源"
+          />
+        </section>
+        <section className="mt-7 grid gap-7 xl:grid-cols-[1.05fr_.95fr]">
+          <div className="space-y-7">
+            <Panel
+              icon={ServerCog}
+              title="LLM 供应商"
+              description="登记 Base URL、受管密钥别名、健康状态与启停。业务数据不会存储明文 API Key。"
+              action={
+                <Button
+                  onClick={() => setProvider(blankProvider())}
+                  className="rounded-full"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  新增供应商
+                </Button>
+              }
+            >
+              <div className="mt-5 space-y-3">
+                {data.providers.map(item => (
+                  <article
+                    key={item.id}
+                    className="rounded-2xl border border-slate-100 bg-slate-50 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold">{item.name}</h3>
+                          <Badge variant="secondary">{item.providerType}</Badge>
+                          <Health status={item.healthStatus} />
+                        </div>
+                        <p className="mt-2 text-xs text-slate-500">
+                          {item.baseUrl} · 密钥引用：
+                          <strong>{item.keyAlias}</strong>
+                        </p>
+                      </div>
+                      <Switch
+                        checked={Boolean(item.isEnabled)}
+                        onCheckedChange={checked =>
+                          toggleProvider.mutate({
+                            id: item.id,
+                            isEnabled: checked,
+                          })
+                        }
+                      />
+                    </div>
+                    <Button
+                      onClick={() =>
+                        setProvider({
+                          id: item.id,
+                          name: item.name,
+                          providerType: item.providerType,
+                          baseUrl: item.baseUrl,
+                          keyAlias: item.keyAlias,
+                          healthStatus: item.healthStatus,
+                          isEnabled: Boolean(item.isEnabled),
+                          orderIndex: item.orderIndex,
+                        })
+                      }
+                      variant="ghost"
+                      size="sm"
+                      className="mt-3 text-violet-700"
+                    >
+                      维护配置
+                    </Button>
+                  </article>
+                ))}
+              </div>
+            </Panel>
+            <Panel
+              icon={Bot}
+              title="模型目录"
+              description="按模型能力、适用场景、上下文与默认顺序维护可调用的模型清单。"
+              action={
+                <Button
+                  onClick={() =>
+                    setModel({
+                      ...blankModel(),
+                      providerId: data.providers[0]?.id || 0,
+                    })
+                  }
+                  variant="outline"
+                  className="rounded-full"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  新增模型
+                </Button>
+              }
+            >
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {data.models.map(({ model: item, providerName }) => (
+                  <article
+                    key={item.id}
+                    className="rounded-2xl border border-slate-100 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold">{item.displayName}</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {providerName || "未关联供应商"} · {item.modelId}
+                        </p>
+                      </div>
+                      {item.isDefault ? (
+                        <Badge className="bg-violet-100 text-violet-700">
+                          默认
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-slate-500">
+                      能力：
+                      {(item.capabilityTags as string[]).join("、") || "未标注"}
+                      <br />
+                      场景：
+                      {(item.scenarioTags as string[]).join("、") || "未标注"}
+                    </p>
+                    <Button
+                      onClick={() =>
+                        setModel({
+                          id: item.id,
+                          providerId: item.providerId,
+                          modelId: item.modelId,
+                          displayName: item.displayName,
+                          capabilityTags: (
+                            item.capabilityTags as string[]
+                          ).join("，"),
+                          scenarioTags: (item.scenarioTags as string[]).join(
+                            "，"
+                          ),
+                          contextWindow: item.contextWindow,
+                          isDefault: Boolean(item.isDefault),
+                          isEnabled: Boolean(item.isEnabled),
+                          orderIndex: item.orderIndex,
+                        })
+                      }
+                      variant="ghost"
+                      size="sm"
+                      className="mt-3 text-violet-700"
+                    >
+                      维护模型
+                    </Button>
+                  </article>
+                ))}
+              </div>
+            </Panel>
+          </div>
+          <div className="space-y-7">
+            <Panel
+              icon={Route}
+              title="场景路由策略"
+              description="为审核、学习、内容等场景指定主模型与降级顺序。非托管供应商需先完成安全网关接入。"
+              action={
+                <Button
+                  onClick={() => setPolicy(blankPolicy())}
+                  variant="outline"
+                  className="rounded-full"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  新增策略
+                </Button>
+              }
+            >
+              <div className="mt-5 space-y-3">
+                {data.policies.map(item => (
+                  <article
+                    key={item.id}
+                    className="rounded-2xl bg-slate-950 p-4 text-white"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold">{item.name}</p>
+                        <p className="mt-1 text-xs text-slate-300">
+                          场景：{item.scenario} · 主模型 ID：
+                          {item.primaryModelId || "未指定"}
+                        </p>
+                      </div>
+                      <Badge
+                        className={
+                          item.isEnabled
+                            ? "bg-emerald-400/15 text-emerald-300"
+                            : "bg-white/10 text-slate-300"
+                        }
+                      >
+                        {item.isEnabled ? "运行中" : "已停用"}
+                      </Badge>
+                    </div>
+                    <Button
+                      onClick={() =>
+                        setPolicy({
+                          id: item.id,
+                          name: item.name,
+                          scenario: item.scenario,
+                          primaryModelId: item.primaryModelId
+                            ? String(item.primaryModelId)
+                            : "",
+                          fallbackModelIds: (
+                            item.fallbackModelIds as number[]
+                          ).join("，"),
+                          isEnabled: Boolean(item.isEnabled),
+                        })
+                      }
+                      variant="secondary"
+                      size="sm"
+                      className="mt-4 bg-white text-slate-900 hover:bg-violet-50"
+                    >
+                      维护策略
+                    </Button>
+                  </article>
+                ))}
+              </div>
+            </Panel>
+            <Panel
+              icon={Database}
+              title="资源可持续性检查"
+              description="将资源状态前置，避免课程、资讯源或模型在长期运营中失效。"
+            >
+              <div className="mt-5 space-y-3">
+                <Resource
+                  label="资讯源"
+                  value={`${data.sources.filter(item => item.isEnabled).length}/${data.sources.length} 启用`}
+                  note={`${staleSources} 个需要检查处理状态或启停`}
+                />
+                <Resource
+                  label="学习路径"
+                  value={`${data.paths.filter(item => item.lifecycleStatus === "published").length}/${data.paths.length} 已发布`}
+                  note={`${data.paths.filter(item => item.lifecycleStatus !== "published").length} 个草稿或已归档，建议在内容运营中维护`}
+                />
+                <Resource
+                  label="课程资源"
+                  value={`${data.courses.filter(item => Boolean(item.resourceUrl)).length}/${data.courses.length} 已关联链接`}
+                  note="建议为课程建立责任人、复审日期与失效链接检测"
+                />
+                <Resource
+                  label="审核队列"
+                  value={`${data.metrics.pending} 待处置`}
+                  note="AI 审核仅作预审，最终发布决策必须保留人工记录"
+                />
+              </div>
+            </Panel>
+            <Panel
+              icon={Activity}
+              title="企业实践主题"
+              description="主题关注、精选实践和讨论权限用于沉淀高价值经验，而非追逐公开社交流量。"
+            >
+              <div className="mt-5 flex flex-wrap gap-2">
+                {data.topics.map(topic => (
+                  <Badge
+                    key={topic.id}
+                    className="rounded-full bg-violet-50 px-3 py-2 text-violet-700"
+                  >
+                    {topic.name}
+                    {topic.isFeatured ? " · 精选" : ""}
+                  </Badge>
+                ))}
+              </div>
+              <Button
+                onClick={() => setLocation("/community")}
+                variant="ghost"
+                className="mt-4 px-0 text-violet-700"
+              >
+                前往社区查看主题流
+              </Button>
+            </Panel>
+          </div>
+        </section>
+        <ProviderDialog
+          draft={provider}
+          setDraft={setProvider}
+          onSave={saveProvider}
+          busy={addProvider.isPending || updateProvider.isPending}
+        />
+        <ModelDialog
+          draft={model}
+          setDraft={setModel}
+          providers={data.providers}
+          onSave={saveModel}
+          busy={addModel.isPending || updateModel.isPending}
+        />
+        <PolicyDialog
+          draft={policy}
+          setDraft={setPolicy}
+          models={data.models.map(item => item.model)}
+          onSave={savePolicyDraft}
+          busy={savePolicy.isPending}
+        />
+      </main>
+    </PlatformShell>
+  );
 }
 
-function Panel({ icon: Icon, title, description, action, children }: { icon: typeof Activity; title: string; description: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="rounded-[26px] border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div className="flex gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50"><Icon className="h-5 w-5 text-violet-700" /></span><div><h2 className="font-serif text-xl font-semibold">{title}</h2><p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">{description}</p></div></div>{action}</div>{children}</section>; }
-function Metric({ icon: Icon, label, value, note }: { icon: typeof Activity; label: string; value: number; note: string }) { return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50"><Icon className="h-5 w-5 text-violet-700" /></span><p className="mt-4 text-3xl font-semibold">{value}</p><p className="mt-1 font-medium">{label}</p><p className="mt-1 text-xs text-slate-400">{note}</p></article>; }
-function Health({ status }: { status: string }) { const tone: Record<string, string> = { healthy: "bg-emerald-50 text-emerald-700", degraded: "bg-amber-50 text-amber-700", disabled: "bg-slate-100 text-slate-600", unknown: "bg-violet-50 text-violet-700" }; return <span className={`rounded-full px-2 py-0.5 text-xs ${tone[status] || tone.unknown}`}>{status}</span>; }
-function Resource({ label, value, note }: { label: string; value: string; note: string }) { return <article className="rounded-2xl bg-slate-50 p-4"><div className="flex justify-between gap-4"><p className="font-medium">{label}</p><p className="text-sm font-semibold text-violet-700">{value}</p></div><p className="mt-2 text-xs leading-5 text-slate-500">{note}</p></article>; }
-function Loading() { return <div className="grid min-h-[65vh] place-items-center"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div>; }
-function Denied({ onBack }: { onBack: () => void }) { return <main className="mx-auto grid min-h-[65vh] max-w-xl place-items-center px-5 text-center"><div><h1 className="font-serif text-3xl font-semibold">仅运营管理员可访问</h1><Button onClick={onBack} className="mt-6">返回工作台</Button></div></main>; }
-function ProviderDialog({ draft, setDraft, onSave, busy }: { draft: ProviderDraft | null; setDraft: (value: ProviderDraft | null) => void; onSave: () => void; busy: boolean }) { return <Dialog open={Boolean(draft)} onOpenChange={open => !open && setDraft(null)}><DialogContent><DialogHeader><DialogTitle>{draft?.id ? "维护供应商" : "新增供应商"}</DialogTitle></DialogHeader>{draft && <div className="grid gap-3 py-2"><Input value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="供应商名称" /><select value={draft.providerType} onChange={e => setDraft({ ...draft, providerType: e.target.value as ProviderDraft["providerType"] })} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option><option value="azure_openai">Azure OpenAI</option><option value="custom">自定义兼容网关</option></select><Input value={draft.baseUrl} onChange={e => setDraft({ ...draft, baseUrl: e.target.value })} placeholder="Base URL（不含 API Key）" /><Input value={draft.keyAlias} onChange={e => setDraft({ ...draft, keyAlias: e.target.value })} placeholder="安全密钥别名，例如 OPENAI_API_KEY" /><div className="grid grid-cols-2 gap-3"><select value={draft.healthStatus} onChange={e => setDraft({ ...draft, healthStatus: e.target.value as ProviderDraft["healthStatus"] })} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="unknown">unknown</option><option value="healthy">healthy</option><option value="degraded">degraded</option><option value="disabled">disabled</option></select><Input type="number" value={draft.orderIndex} onChange={e => setDraft({ ...draft, orderIndex: Number(e.target.value) })} /></div><label className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">启用供应商<Switch checked={draft.isEnabled} onCheckedChange={checked => setDraft({ ...draft, isEnabled: checked })} /></label></div>}<DialogFooter><Button variant="outline" onClick={() => setDraft(null)}>取消</Button><Button disabled={!draft?.name || !draft.baseUrl || !draft.keyAlias || busy} onClick={onSave}>保存</Button></DialogFooter></DialogContent></Dialog>; }
-function ModelDialog({ draft, setDraft, providers, onSave, busy }: { draft: ModelDraft | null; setDraft: (value: ModelDraft | null) => void; providers: Array<{ id: number; name: string }>; onSave: () => void; busy: boolean }) { return <Dialog open={Boolean(draft)} onOpenChange={open => !open && setDraft(null)}><DialogContent><DialogHeader><DialogTitle>{draft?.id ? "维护模型" : "新增模型"}</DialogTitle></DialogHeader>{draft && <div className="grid gap-3 py-2"><select value={draft.providerId} onChange={e => setDraft({ ...draft, providerId: Number(e.target.value) })} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value={0}>选择供应商</option>{providers.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><Input value={draft.displayName} onChange={e => setDraft({ ...draft, displayName: e.target.value })} placeholder="模型展示名" /><Input value={draft.modelId} onChange={e => setDraft({ ...draft, modelId: e.target.value })} placeholder="模型 ID" /><Input value={draft.capabilityTags} onChange={e => setDraft({ ...draft, capabilityTags: e.target.value })} placeholder="能力标签，逗号分隔" /><Input value={draft.scenarioTags} onChange={e => setDraft({ ...draft, scenarioTags: e.target.value })} placeholder="场景标签，逗号分隔" /><div className="grid grid-cols-2 gap-3"><Input type="number" value={draft.contextWindow} onChange={e => setDraft({ ...draft, contextWindow: Number(e.target.value) })} /><Input type="number" value={draft.orderIndex} onChange={e => setDraft({ ...draft, orderIndex: Number(e.target.value) })} /></div><label className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">默认模型<Switch checked={draft.isDefault} onCheckedChange={checked => setDraft({ ...draft, isDefault: checked })} /></label><label className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">启用模型<Switch checked={draft.isEnabled} onCheckedChange={checked => setDraft({ ...draft, isEnabled: checked })} /></label></div>}<DialogFooter><Button variant="outline" onClick={() => setDraft(null)}>取消</Button><Button disabled={!draft?.providerId || !draft.displayName || !draft.modelId || busy} onClick={onSave}>保存</Button></DialogFooter></DialogContent></Dialog>; }
-function PolicyDialog({ draft, setDraft, models, onSave, busy }: { draft: PolicyDraft | null; setDraft: (value: PolicyDraft | null) => void; models: Array<{ id: number; displayName: string }>; onSave: () => void; busy: boolean }) { return <Dialog open={Boolean(draft)} onOpenChange={open => !open && setDraft(null)}><DialogContent><DialogHeader><DialogTitle>{draft?.id ? "维护场景策略" : "新增场景策略"}</DialogTitle></DialogHeader>{draft && <div className="grid gap-3 py-2"><Input value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="策略名称" /><select value={draft.scenario} onChange={e => setDraft({ ...draft, scenario: e.target.value as PolicyDraft["scenario"] })} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="default">默认调用</option><option value="audit">AI 审核</option><option value="learning">学习助手</option><option value="content">内容生成</option></select><select value={draft.primaryModelId} onChange={e => setDraft({ ...draft, primaryModelId: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">未指定</option>{models.map(item => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select><Input value={draft.fallbackModelIds} onChange={e => setDraft({ ...draft, fallbackModelIds: e.target.value })} placeholder="降级模型 ID，逗号分隔" /><label className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">启用策略<Switch checked={draft.isEnabled} onCheckedChange={checked => setDraft({ ...draft, isEnabled: checked })} /></label></div>}<DialogFooter><Button variant="outline" onClick={() => setDraft(null)}>取消</Button><Button disabled={!draft?.name || busy} onClick={onSave}>保存</Button></DialogFooter></DialogContent></Dialog>; }
+function Panel({
+  icon: Icon,
+  title,
+  description,
+  action,
+  children,
+}: {
+  icon: typeof Activity;
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[26px] border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div className="flex gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50">
+            <Icon className="h-5 w-5 text-violet-700" />
+          </span>
+          <div>
+            <h2 className="font-serif text-xl font-semibold">{title}</h2>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-slate-500">
+              {description}
+            </p>
+          </div>
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+function Metric({
+  icon: Icon,
+  label,
+  value,
+  note,
+}: {
+  icon: typeof Activity;
+  label: string;
+  value: number;
+  note: string;
+}) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-50">
+        <Icon className="h-5 w-5 text-violet-700" />
+      </span>
+      <p className="mt-4 text-3xl font-semibold">{value}</p>
+      <p className="mt-1 font-medium">{label}</p>
+      <p className="mt-1 text-xs text-slate-400">{note}</p>
+    </article>
+  );
+}
+function Health({ status }: { status: string }) {
+  const tone: Record<string, string> = {
+    healthy: "bg-emerald-50 text-emerald-700",
+    degraded: "bg-amber-50 text-amber-700",
+    disabled: "bg-slate-100 text-slate-600",
+    unknown: "bg-violet-50 text-violet-700",
+  };
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs ${tone[status] || tone.unknown}`}
+    >
+      {status}
+    </span>
+  );
+}
+function Resource({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string;
+  note: string;
+}) {
+  return (
+    <article className="rounded-2xl bg-slate-50 p-4">
+      <div className="flex justify-between gap-4">
+        <p className="font-medium">{label}</p>
+        <p className="text-sm font-semibold text-violet-700">{value}</p>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-slate-500">{note}</p>
+    </article>
+  );
+}
+function Loading() {
+  return (
+    <div className="grid min-h-[65vh] place-items-center">
+      <Loader2 className="h-6 w-6 animate-spin text-violet-600" />
+    </div>
+  );
+}
+function Denied({ onBack }: { onBack: () => void }) {
+  return (
+    <main className="mx-auto grid min-h-[65vh] max-w-xl place-items-center px-5 text-center">
+      <div>
+        <h1 className="font-serif text-3xl font-semibold">
+          仅运营管理员可访问
+        </h1>
+        <Button onClick={onBack} className="mt-6">
+          返回工作台
+        </Button>
+      </div>
+    </main>
+  );
+}
+function ProviderDialog({
+  draft,
+  setDraft,
+  onSave,
+  busy,
+}: {
+  draft: ProviderDraft | null;
+  setDraft: (value: ProviderDraft | null) => void;
+  onSave: () => void;
+  busy: boolean;
+}) {
+  return (
+    <Dialog
+      open={Boolean(draft)}
+      onOpenChange={open => !open && setDraft(null)}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{draft?.id ? "维护供应商" : "新增供应商"}</DialogTitle>
+          <DialogDescription>
+            维护模型供应商的受管连接信息、状态与复审责任。
+          </DialogDescription>
+        </DialogHeader>
+        {draft && (
+          <div className="grid gap-3 py-2">
+            <Input
+              value={draft.name}
+              onChange={e => setDraft({ ...draft, name: e.target.value })}
+              placeholder="供应商名称"
+            />
+            <select
+              value={draft.providerType}
+              onChange={e =>
+                setDraft({
+                  ...draft,
+                  providerType: e.target.value as ProviderDraft["providerType"],
+                })
+              }
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="azure_openai">Azure OpenAI</option>
+              <option value="custom">自定义兼容网关</option>
+            </select>
+            <Input
+              value={draft.baseUrl}
+              onChange={e => setDraft({ ...draft, baseUrl: e.target.value })}
+              placeholder="Base URL（不含 API Key）"
+            />
+            <Input
+              value={draft.keyAlias}
+              onChange={e => setDraft({ ...draft, keyAlias: e.target.value })}
+              placeholder="安全密钥别名，例如 OPENAI_API_KEY"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <select
+                value={draft.healthStatus}
+                onChange={e =>
+                  setDraft({
+                    ...draft,
+                    healthStatus: e.target
+                      .value as ProviderDraft["healthStatus"],
+                  })
+                }
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="unknown">unknown</option>
+                <option value="healthy">healthy</option>
+                <option value="degraded">degraded</option>
+                <option value="disabled">disabled</option>
+              </select>
+              <Input
+                type="number"
+                value={draft.orderIndex}
+                onChange={e =>
+                  setDraft({ ...draft, orderIndex: Number(e.target.value) })
+                }
+              />
+            </div>
+            <label className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+              启用供应商
+              <Switch
+                checked={draft.isEnabled}
+                onCheckedChange={checked =>
+                  setDraft({ ...draft, isEnabled: checked })
+                }
+              />
+            </label>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setDraft(null)}>
+            取消
+          </Button>
+          <Button
+            disabled={!draft?.name || !draft.baseUrl || !draft.keyAlias || busy}
+            onClick={onSave}
+          >
+            保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+function ModelDialog({
+  draft,
+  setDraft,
+  providers,
+  onSave,
+  busy,
+}: {
+  draft: ModelDraft | null;
+  setDraft: (value: ModelDraft | null) => void;
+  providers: Array<{ id: number; name: string }>;
+  onSave: () => void;
+  busy: boolean;
+}) {
+  return (
+    <Dialog
+      open={Boolean(draft)}
+      onOpenChange={open => !open && setDraft(null)}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{draft?.id ? "维护模型" : "新增模型"}</DialogTitle>
+          <DialogDescription>
+            配置模型目录信息、能力标签、可用状态与成本等级。
+          </DialogDescription>
+        </DialogHeader>
+        {draft && (
+          <div className="grid gap-3 py-2">
+            <select
+              value={draft.providerId}
+              onChange={e =>
+                setDraft({ ...draft, providerId: Number(e.target.value) })
+              }
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value={0}>选择供应商</option>
+              {providers.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+            <Input
+              value={draft.displayName}
+              onChange={e =>
+                setDraft({ ...draft, displayName: e.target.value })
+              }
+              placeholder="模型展示名"
+            />
+            <Input
+              value={draft.modelId}
+              onChange={e => setDraft({ ...draft, modelId: e.target.value })}
+              placeholder="模型 ID"
+            />
+            <Input
+              value={draft.capabilityTags}
+              onChange={e =>
+                setDraft({ ...draft, capabilityTags: e.target.value })
+              }
+              placeholder="能力标签，逗号分隔"
+            />
+            <Input
+              value={draft.scenarioTags}
+              onChange={e =>
+                setDraft({ ...draft, scenarioTags: e.target.value })
+              }
+              placeholder="场景标签，逗号分隔"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                type="number"
+                value={draft.contextWindow}
+                onChange={e =>
+                  setDraft({ ...draft, contextWindow: Number(e.target.value) })
+                }
+              />
+              <Input
+                type="number"
+                value={draft.orderIndex}
+                onChange={e =>
+                  setDraft({ ...draft, orderIndex: Number(e.target.value) })
+                }
+              />
+            </div>
+            <label className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+              默认模型
+              <Switch
+                checked={draft.isDefault}
+                onCheckedChange={checked =>
+                  setDraft({ ...draft, isDefault: checked })
+                }
+              />
+            </label>
+            <label className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+              启用模型
+              <Switch
+                checked={draft.isEnabled}
+                onCheckedChange={checked =>
+                  setDraft({ ...draft, isEnabled: checked })
+                }
+              />
+            </label>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setDraft(null)}>
+            取消
+          </Button>
+          <Button
+            disabled={
+              !draft?.providerId || !draft.displayName || !draft.modelId || busy
+            }
+            onClick={onSave}
+          >
+            保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+function PolicyDialog({
+  draft,
+  setDraft,
+  models,
+  onSave,
+  busy,
+}: {
+  draft: PolicyDraft | null;
+  setDraft: (value: PolicyDraft | null) => void;
+  models: Array<{ id: number; displayName: string }>;
+  onSave: () => void;
+  busy: boolean;
+}) {
+  return (
+    <Dialog
+      open={Boolean(draft)}
+      onOpenChange={open => !open && setDraft(null)}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {draft?.id ? "维护场景策略" : "新增场景策略"}
+          </DialogTitle>
+          <DialogDescription>
+            为具体业务场景设置主模型、备用模型和路由约束。
+          </DialogDescription>
+        </DialogHeader>
+        {draft && (
+          <div className="grid gap-3 py-2">
+            <Input
+              value={draft.name}
+              onChange={e => setDraft({ ...draft, name: e.target.value })}
+              placeholder="策略名称"
+            />
+            <select
+              value={draft.scenario}
+              onChange={e =>
+                setDraft({
+                  ...draft,
+                  scenario: e.target.value as PolicyDraft["scenario"],
+                })
+              }
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="default">默认调用</option>
+              <option value="audit">AI 审核</option>
+              <option value="learning">学习助手</option>
+              <option value="content">内容生成</option>
+            </select>
+            <select
+              value={draft.primaryModelId}
+              onChange={e =>
+                setDraft({ ...draft, primaryModelId: e.target.value })
+              }
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">未指定</option>
+              {models.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.displayName}
+                </option>
+              ))}
+            </select>
+            <Input
+              value={draft.fallbackModelIds}
+              onChange={e =>
+                setDraft({ ...draft, fallbackModelIds: e.target.value })
+              }
+              placeholder="降级模型 ID，逗号分隔"
+            />
+            <label className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
+              启用策略
+              <Switch
+                checked={draft.isEnabled}
+                onCheckedChange={checked =>
+                  setDraft({ ...draft, isEnabled: checked })
+                }
+              />
+            </label>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setDraft(null)}>
+            取消
+          </Button>
+          <Button disabled={!draft?.name || busy} onClick={onSave}>
+            保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

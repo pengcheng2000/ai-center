@@ -1,6 +1,9 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
+import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
+import { useAuth } from "./_core/hooks/useAuth";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import AIAssistantBall from "./components/AIAssistantBall";
@@ -29,9 +32,20 @@ import SkillsDirectImport from "./pages/SkillsDirectImport";
 import AgentImportOperations from "./pages/AgentImportOperations";
 import CommunityOperations from "./pages/CommunityOperations";
 
-function Router() {
-  return <Switch><Route path="/" component={Home} /><Route path="/login" component={Login} /><Route path="/learn" component={LearningCenter} /><Route path="/learn/:pathId/course/:courseId" component={CourseDetail} /><Route path="/learn/:id" component={LearningPathDetail} /><Route path="/news" component={NewsCenter} /><Route path="/news/:id" component={NewsArticle} /><Route path="/community" component={Community} /><Route path="/community/new" component={Community} /><Route path="/community/:id" component={PostDetail} /><Route path="/apps" component={ApplicationCenter} /><Route path="/skills/submit" component={SkillSubmit} /><Route path="/skills/:id" component={SkillDetail} /><Route path="/skills" component={SkillsHub} /><Route path="/me" component={Profile} /><Route path="/operations" component={Operations} /><Route path="/operations/governance" component={GovernanceCenter} /><Route path="/operations/content" component={ContentOperations} /><Route path="/operations/lifecycle" component={ResourceLifecycleCenter} /><Route path="/operations/apps" component={ApplicationOperations} /><Route path="/operations/community" component={CommunityOperations} /><Route path="/operations/skills/import" component={SkillsDirectImport} /><Route path="/operations/skills" component={SkillsOperations} /><Route path="/operations/agent-imports" component={AgentImportOperations} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch>;
+function MemberRoutes() {
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (loading || user || typeof window === "undefined") return;
+    const next = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    window.location.replace(`/login?next=${encodeURIComponent(next)}`);
+  }, [loading, user]);
+
+  if (loading || !user) return <div className="grid min-h-screen place-items-center bg-[#f6f6f3]" aria-label="正在验证登录状态"><Loader2 className="h-6 w-6 animate-spin text-violet-600" /></div>;
+  return <><Switch><Route path="/" component={Home} /><Route path="/learn" component={LearningCenter} /><Route path="/learn/:pathId/course/:courseId" component={CourseDetail} /><Route path="/learn/:id" component={LearningPathDetail} /><Route path="/news" component={NewsCenter} /><Route path="/news/:id" component={NewsArticle} /><Route path="/community" component={Community} /><Route path="/community/new" component={Community} /><Route path="/community/:id" component={PostDetail} /><Route path="/apps" component={ApplicationCenter} /><Route path="/skills/submit" component={SkillSubmit} /><Route path="/skills/:id" component={SkillDetail} /><Route path="/skills" component={SkillsHub} /><Route path="/me" component={Profile} /><Route path="/operations" component={Operations} /><Route path="/operations/governance" component={GovernanceCenter} /><Route path="/operations/content" component={ContentOperations} /><Route path="/operations/lifecycle" component={ResourceLifecycleCenter} /><Route path="/operations/apps" component={ApplicationOperations} /><Route path="/operations/community" component={CommunityOperations} /><Route path="/operations/skills/import" component={SkillsDirectImport} /><Route path="/operations/skills" component={SkillsOperations} /><Route path="/operations/agent-imports" component={AgentImportOperations} /><Route path="/404" component={NotFound} /><Route component={NotFound} /></Switch><AIAssistantBall /></>;
 }
 
-function App() { return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster richColors position="top-center" /><Router /><AIAssistantBall /></TooltipProvider></ThemeProvider></ErrorBoundary>; }
+function Router() { return <Switch><Route path="/login" component={Login} /><Route><MemberRoutes /></Route></Switch>; }
+
+function App() { return <ErrorBoundary><ThemeProvider defaultTheme="light"><TooltipProvider><Toaster richColors position="top-center" /><Router /></TooltipProvider></ThemeProvider></ErrorBoundary>; }
 export default App;

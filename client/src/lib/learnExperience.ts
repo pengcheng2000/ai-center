@@ -96,7 +96,7 @@ export function progressState(percent: number): { label: string; tone: "done" | 
 // PDF 标注颜色（Tailwind 类名集中在组件外的常量，避免动态拼接失效）。
 export const ANNOTATION_COLOR_CLASSES: Record<string, { fill: string; border: string; dot: string; label: string }> = {
   amber: { fill: "bg-amber-300/30", border: "border-amber-400", dot: "bg-amber-400", label: "琥珀" },
-  violet: { fill: "bg-violet-300/30", border: "border-violet-400", dot: "bg-violet-400", label: "紫罗兰" },
+  violet: { fill: "bg-[#c4b5fd]/30", border: "border-[#8b5cf6]", dot: "bg-[#8b5cf6]", label: "紫罗兰" },
   rose: { fill: "bg-rose-300/30", border: "border-rose-400", dot: "bg-rose-400", label: "玫红" },
   emerald: { fill: "bg-emerald-300/30", border: "border-emerald-400", dot: "bg-emerald-400", label: "翠绿" },
   sky: { fill: "bg-sky-300/30", border: "border-sky-400", dot: "bg-sky-400", label: "天蓝" },
@@ -105,12 +105,12 @@ export const ANNOTATION_COLOR_CLASSES: Record<string, { fill: string; border: st
 // ---------- 卡片网格 ----------
 
 // 卡片配色按路径 accent 取值，缺省回退 violet。
-export const PATH_ACCENTS: Record<string, { gradient: string; chip: string; icon: string; ring: string }> = {
-  violet: { gradient: "from-violet-600 via-violet-500 to-indigo-600", chip: "bg-violet-100 text-violet-700", icon: "bg-violet-600", ring: "ring-violet-200" },
-  orange: { gradient: "from-orange-500 via-amber-500 to-rose-500", chip: "bg-orange-100 text-orange-700", icon: "bg-orange-500", ring: "ring-orange-200" },
-  emerald: { gradient: "from-emerald-500 via-teal-500 to-cyan-600", chip: "bg-emerald-100 text-emerald-700", icon: "bg-emerald-500", ring: "ring-emerald-200" },
-  sky: { gradient: "from-sky-500 via-blue-500 to-indigo-500", chip: "bg-sky-100 text-sky-700", icon: "bg-sky-500", ring: "ring-sky-200" },
-  rose: { gradient: "from-rose-500 via-pink-500 to-fuchsia-500", chip: "bg-rose-100 text-rose-700", icon: "bg-rose-500", ring: "ring-rose-200" },
+export const PATH_ACCENTS: Record<string, { gradient: string; chip: string; icon: string; ring: string; button: string }> = {
+  violet: { gradient: "from-[#4c557f] via-[#596287] to-[#626a91]", chip: "bg-[#eef0f7] text-[#4c557f]", icon: "bg-[#596287]", ring: "ring-[#cfd3e2]", button: "bg-[#596287] text-white hover:bg-[#4c557f]" },
+  orange: { gradient: "from-[#765246] via-[#835c4d] to-[#936453]", chip: "bg-[#f5eeea] text-[#765246]", icon: "bg-[#835c4d]", ring: "ring-[#dfccc3]", button: "bg-[#835c4d] text-white hover:bg-[#765246]" },
+  emerald: { gradient: "from-[#2f6668] via-[#3b7070] to-[#477773]", chip: "bg-[#e9f2f1] text-[#2f6668]", icon: "bg-[#3b7070]", ring: "ring-[#c5d9d7]", button: "bg-[#3b7070] text-white hover:bg-[#2f6668]" },
+  sky: { gradient: "from-[#3f6578] via-[#4b7082] to-[#587b8b]", chip: "bg-[#ebf1f4] text-[#3f6578]", icon: "bg-[#4b7082]", ring: "ring-[#c7d6dd]", button: "bg-[#4b7082] text-white hover:bg-[#3f6578]" },
+  rose: { gradient: "from-[#755566] via-[#825f70] to-[#906b7b]", chip: "bg-[#f3edf0] text-[#755566]", icon: "bg-[#825f70]", ring: "ring-[#dccbd3]", button: "bg-[#825f70] text-white hover:bg-[#755566]" },
 };
 export function pathAccent(accent: string | null | undefined) { return PATH_ACCENTS[accent ?? "violet"] ?? PATH_ACCENTS.violet; }
 

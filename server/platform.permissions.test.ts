@@ -33,6 +33,8 @@ describe("platform access boundaries", () => {
 
   it("rejects community list, detail and draft attachment cleanup without an authenticated employee", async () => {
     const caller = appRouter.createCaller(createContext(null));
+    await expect(caller.platform.catalog()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(caller.platform.applications.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(caller.platform.community.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(caller.platform.community.detail({ postId: 1 })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
     await expect(caller.platform.community.attachmentAccess({ id: 1 })).rejects.toMatchObject({ code: "UNAUTHORIZED" });

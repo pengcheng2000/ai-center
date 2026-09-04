@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { htmlToMarkdown, markdownToPlainText, referencedAttachmentIds, resolveAttachmentRefs, sanitizeMarkdown, stripAttachmentRef, toRenderableMarkdown } from "./communityContent";
+import { htmlToMarkdown, markdownToPlainText, referencedAttachmentIds, resolveAttachmentRefs, safeImageTarget, sanitizeMarkdown, stripAttachmentRef, toRenderableMarkdown } from "./communityContent";
 
 describe("社区正文清洗", () => {
   it("剥离裸 HTML 标签，只保留可读文本与 Markdown 结构", () => {
@@ -18,6 +18,15 @@ describe("社区正文清洗", () => {
     expect(result).not.toContain("javascript:");
     expect(result).not.toContain("data:image");
     expect(result).toContain("点我");
+  });
+
+  it("图片仅允许 HTTPS、站内路径和附件引用", () => {
+    const result = sanitizeMarkdown("![安全](https://images.example.com/a.png) ![混合内容](http://images.example.com/a.png) ![带凭据](https://user:pass@example.com/a.png) ![站内](/api/files/a.png)");
+    expect(result).toContain("![安全](https://images.example.com/a.png)");
+    expect(result).toContain("![站内](/api/files/a.png)");
+    expect(result).not.toContain("http://images.example.com");
+    expect(result).not.toContain("user:pass");
+    expect(safeImageTarget("attachment:9")).toBe("attachment:9");
   });
 
   it("限制正文长度并折叠多余空行", () => {

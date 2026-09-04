@@ -11,38 +11,35 @@ export default function NotFound() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100">
-      <Card className="w-full max-w-lg mx-4 shadow-lg border-0 bg-white/80 backdrop-blur-sm">
-        <CardContent className="pt-8 pb-8 text-center">
-          <div className="flex justify-center mb-6">
-            <div className="relative">
-              <div className="absolute inset-0 bg-red-100 rounded-full animate-pulse" />
-              <AlertCircle className="relative h-16 w-16 text-red-500" />
+    <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f6f3] px-4">
+      <Card className="w-full max-w-lg border-white/90 bg-white/90 shadow-xl backdrop-blur-sm">
+        <CardContent className="pb-9 pt-9 text-center">
+          <div className="mb-6 flex justify-center">
+            <div className="grid size-16 place-items-center rounded-2xl bg-rose-50 text-rose-600">
+              <AlertCircle className="h-7 w-7" />
             </div>
           </div>
 
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">404</h1>
+          <h1 className="mb-2 text-4xl font-semibold tracking-[-0.05em] text-slate-900">404</h1>
 
-          <h2 className="text-xl font-semibold text-slate-700 mb-4">
-            Page Not Found
+          <h2 className="mb-4 text-xl font-semibold text-slate-700">
+            页面暂时找不到
           </h2>
 
-          <p className="text-slate-600 mb-8 leading-relaxed">
-            Sorry, the page you are looking for doesn't exist.
-            <br />
-            It may have been moved or deleted.
+          <p className="mb-8 leading-relaxed text-slate-500">
+            这个地址可能已经移动、删除，或暂时不可访问。
           </p>
 
           <div
             id="not-found-button-group"
-            className="flex flex-col sm:flex-row gap-3 justify-center"
+            className="flex flex-col justify-center gap-3 sm:flex-row"
           >
             <Button
               onClick={handleGoHome}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg"
+              className="px-6"
             >
               <Home className="w-4 h-4 mr-2" />
-              Go Home
+              返回工作台
             </Button>
           </div>
         </CardContent>

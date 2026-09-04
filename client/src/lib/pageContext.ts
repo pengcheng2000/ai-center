@@ -65,12 +65,12 @@ export function collectPageContext(route: string, utils: ReturnType<typeof trpc.
     }
   } else if (kind === "newsList" && catalog) {
     context.title = "AI 资讯";
-    context.excerpt = `共 ${catalog.news.length} 条已审核资讯，例如：${catalog.news.slice(0, 8).map(row => row.item.title).join("；")}。`;
+    context.excerpt = `共 ${catalog.news.length} 条已审核资讯，例如：${catalog.news.slice(0, 8).map(row => `${row.item.title}（来源：${row.sourceName || "平台运营"}，分类：${row.item.category}，发布时间：${String(row.item.publishedAt ?? row.item.createdAt)}）`).join("；")}。`;
   } else if (kind === "newsArticle" && id && catalog) {
     const row = catalog.news.find(item => item.item.id === id);
     if (row) {
       context.title = row.item.title;
-      context.excerpt = `${row.item.summary}\n\n${clamp(row.item.content ?? "", 10_000)}`;
+      context.excerpt = `来源：${row.sourceName || "平台运营"}；分类：${row.item.category}；发布时间：${String(row.item.publishedAt ?? row.item.createdAt)}。\n\n${row.item.summary}\n\n${clamp(row.item.content ?? "", 10_000)}`;
     }
   } else if (kind === "communityList") {
     const posts = utils.platform.community.list.getData();

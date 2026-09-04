@@ -29,11 +29,23 @@ describe("workbench navigation contracts", () => {
   });
 
   it("binds the real home and learning-task entrypoints to the tested navigation layer", () => {
-    const home = readFileSync(resolve(process.cwd(), "client/src/pages/Home.tsx"), "utf8");
-    const pathDetail = readFileSync(resolve(process.cwd(), "client/src/pages/LearningPathDetail.tsx"), "utf8");
-    expect(home).toContain("workbenchHandlers.openLearningPath(setLocation, item.path.id)");
-    expect(home).toContain("workbenchHandlers.openNewsArticle(setLocation, item.id)");
-    expect(home).toContain("workbenchHandlers.openCommunityComposer(setLocation)");
+    const home = readFileSync(
+      resolve(process.cwd(), "client/src/pages/Home.tsx"),
+      "utf8"
+    );
+    const pathDetail = readFileSync(
+      resolve(process.cwd(), "client/src/pages/LearningPathDetail.tsx"),
+      "utf8"
+    );
+    expect(home).toMatch(
+      /workbenchHandlers\.openLearningPath\(\s*setLocation,\s*item\.path\.id\s*\)/
+    );
+    expect(home).toContain(
+      "workbenchHandlers.openNewsArticle(setLocation, item.id)"
+    );
+    expect(home).toContain(
+      "workbenchHandlers.openCommunityComposer(setLocation)"
+    );
     expect(pathDetail).toContain("workbenchRoutes.course(path.id, course.id)");
   });
 });

@@ -8,20 +8,21 @@ import { Streamdown } from "streamdown";
 export type DocReaderProps = {
   content: string;
   title: string;
+  initialPercent?: number;
   onProgress: (percent: number) => void;
 };
 
 const FONT_SIZES = ["text-[15px]", "text-[17px]", "text-[19px]"];
 
-export default function DocReader({ content, title, onProgress }: DocReaderProps) {
+export default function DocReader({ content, title, initialPercent = 0, onProgress }: DocReaderProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const lastReportRef = useRef(-1);
+  const lastReportRef = useRef(clampPercent(initialPercent));
   // 父组件每次渲染都会传入新的 inline onProgress；经 ref 转发，避免滚动测量 effect
   // 随回调身份反复重建（重建即重复 measure 并可能重复上报进度，参见 VideoPlayer 的同类注释）。
   const onProgressRef = useRef(onProgress);
   useEffect(() => { onProgressRef.current = onProgress; });
-  const [percent, setPercent] = useState(0);
+  const [percent, setPercent] = useState(clampPercent(initialPercent));
   const [immersive, setImmersive] = useState(false);
   const [fontStep, setFontStep] = useState(1);
   const [chromeVisible, setChromeVisible] = useState(true);
@@ -33,7 +34,7 @@ export default function DocReader({ content, title, onProgress }: DocReaderProps
     const measure = () => {
       const scrollable = host.scrollHeight - host.clientHeight;
       const value = scrollable <= 0 ? 100 : clampPercent((host.scrollTop / scrollable) * 100);
-      setPercent(value);
+      setPercent(current => Math.max(current, value));
       // 每 20% 上报一次，避免拖动滚动条时打爆接口。
       const bucket = Math.round(value / 20) * 20;
       if (bucket > lastReportRef.current) { lastReportRef.current = bucket; onProgressRef.current(bucket); }
@@ -83,18 +84,18 @@ export default function DocReader({ content, title, onProgress }: DocReaderProps
     </div>
   </div>;
 
-  return <div ref={containerRef} className={cn(immersive ? "fixed inset-0 z-[60] flex flex-col bg-[#f8f7ff]" : "overflow-hidden rounded-xl border border-slate-200 bg-white")}>
+  return <div ref={containerRef} className={cn(immersive ? "fixed inset-0 z-40 flex flex-col bg-[#f6f6f3]" : "overflow-hidden rounded-2xl border border-slate-200 bg-white")}>
     <div className={cn("h-1 w-full shrink-0 bg-slate-100", immersive && "bg-violet-100")}><div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-[width]" style={{ width: `${percent}%` }} /></div>
 
     {/* 工具栏：普通模式常驻；沉浸模式悬浮顶部自动隐藏 */}
     {immersive
       ? <div className={cn("pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 transition-opacity duration-300", chromeVisible ? "opacity-100" : "opacity-0")}>
-        <div className="pointer-events-auto rounded-xl border border-slate-200 bg-white/95 px-4 py-2 shadow-xl backdrop-blur">{toolbar}</div>
+        <div className="pointer-events-auto rounded-2xl border border-white/80 bg-white/92 px-4 py-2 shadow-xl backdrop-blur-xl">{toolbar}</div>
       </div>
       : <div className="border-b border-slate-100 px-5 py-2.5">{toolbar}</div>}
 
     {/* 正文：限宽 42rem 舒适行长，字号可调 */}
-    <div ref={hostRef} className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-6", immersive ? "bg-[#f8f7ff]" : "bg-white")} style={immersive ? undefined : { maxHeight: "min(72vh, 860px)" }}>
+    <div ref={hostRef} className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-6", immersive ? "bg-[#f6f6f3]" : "bg-white")} style={immersive ? undefined : { maxHeight: "min(72vh, 860px)" }}>
       <article className={cn("prose prose-slate mx-auto max-w-[42rem] prose-headings:font-serif prose-p:leading-[1.95]", FONT_SIZES[fontStep])}>
         <Streamdown>{content}</Streamdown>
       </article>

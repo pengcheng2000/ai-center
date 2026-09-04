@@ -200,6 +200,10 @@ export function shapeCatalogNews<T extends { id: number; content: string | null;
 }
 export function filterPublishedCourses<T extends { lifecycleStatus: "draft" | "published" | "archived" }>(rows: T[]) { return rows.filter(row => row.lifecycleStatus === "published"); }
 export function filterApprovedNews<T extends { reviewStatus: string; isDeleted?: number }>(rows: T[]) { return rows.filter(row => row.reviewStatus === "approved" && !row.isDeleted); }
+export function countResourceGaps<T extends { id: number; resourceUrl: string | null }, M extends { courseId: number }>(courseRows: T[], materialRows: M[]) {
+  const coveredCourseIds = new Set(materialRows.map(item => item.courseId));
+  return courseRows.filter(item => !item.resourceUrl && !coveredCourseIds.has(item.id)).length;
+}
 
 export async function getPublicCatalog(category?: string, fullTextOnly = false) {
   await ensurePlatformBootstrap();
@@ -293,7 +297,7 @@ export async function getOperationsData() {
   ]);
   const publishedPaths = paths.filter(item => item.lifecycleStatus === "published").length;
   const publishedCourses = courseRows.filter(item => item.lifecycleStatus === "published");
-  const resourceGaps = publishedCourses.filter(item => !item.resourceUrl).length;
+  const resourceGaps = countResourceGaps(publishedCourses, materials);
   const reviewRisk = [...paths, ...courseRows].filter(item => item.reviewStatus !== "current").length;
   return { sources, modules, apps, agents, rules, records, news, deletedNews, providers, models, policies, paths, courses: courseRows, materials, topics, reviewers, importKeys, importJobs, metrics: { content: Number(metrics[0][0]?.count ?? 0), pending: Number(metrics[1][0]?.count ?? 0), learners: Number(metrics[2][0]?.count ?? 0), posts: Number(metrics[3][0]?.count ?? 0) }, learningMetrics: { publishedPaths, totalPaths: paths.length, publishedCourses: publishedCourses.length, totalCourses: courseRows.length, resourceGaps, reviewRisk, completionRate: Math.round(Number(averageProgress[0]?.average ?? 0)) } };
 }

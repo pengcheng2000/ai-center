@@ -28,6 +28,18 @@ function safeLinkTarget(url: string) {
   return /^(https?:\/\/|\/)/i.test(trimmed) ? trimmed : null;
 }
 
+export function safeImageTarget(url: string) {
+  const safe = safeLinkTarget(url);
+  if (!safe) return null;
+  if (safe.startsWith(ATTACHMENT_REF_PREFIX) || safe.startsWith("/")) return safe;
+  try {
+    const parsed = new URL(safe);
+    return parsed.protocol === "https:" && !parsed.username && !parsed.password ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Strip raw HTML and unsafe link targets so stored Markdown never carries executable markup. */
 export function sanitizeMarkdown(input: string) {
   const withoutControl = input.replace(CONTROL_CHARS, "").replace(/\r\n?/g, "\n");
@@ -35,7 +47,7 @@ export function sanitizeMarkdown(input: string) {
   const withoutScripts = withoutControl.replace(/<(script|style|iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "").replace(/<(script|style|iframe|object|embed)\b[^>]*>/gi, "");
   const withoutHtml = withoutScripts.replace(/<\/?[a-z][^>]*>/gi, "");
   const withSafeLinks = withoutHtml.replace(/(!?)\[([^\]]*)\]\(([^)\s]*)(\s+"[^"]*")?\)/g, (_match, bang: string, label: string, target: string) => {
-    const safe = safeLinkTarget(target);
+    const safe = bang ? safeImageTarget(target) : safeLinkTarget(target);
     if (safe) return `${bang}[${label}](${safe})`;
     return bang ? "" : label;
   });
@@ -49,7 +61,7 @@ export function htmlToMarkdown(input: string) {
   output = output.replace(/<img\b[^>]*>/gi, (match: string) => {
     const src = match.match(/src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
     const alt = match.match(/alt\s*=\s*(?:"([^"]*)"|'([^']*)')/i);
-    const target = safeLinkTarget(src?.[1] ?? src?.[2] ?? src?.[3] ?? "");
+    const target = safeImageTarget(src?.[1] ?? src?.[2] ?? src?.[3] ?? "");
     return target ? `\n\n![${decodeEntities(alt?.[1] ?? alt?.[2] ?? "图片")}](${target})\n\n` : "";
   });
   output = output.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, (match: string, label: string) => {

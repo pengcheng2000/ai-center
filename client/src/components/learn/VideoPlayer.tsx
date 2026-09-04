@@ -16,13 +16,14 @@ export type VideoPlayerProps = {
   title: string;
   comments: CommentRow[];
   resumeSecond: number | null;
+  initialPercent?: number;
   // watchedSeconds 为本次会话累计观看秒数（正向播放），用于学习分钟数增量统计。
   onProgress: (payload: { position: number; percent: number; watchedSeconds: number }) => void;
   // 成功后由课程页局部追加，避免重新加载整个课程体验并打断视频状态。
   onCommentAdded?: (comment: CommentRow) => void;
 };
 
-export default function VideoPlayer({ materialId, src, title, comments, resumeSecond, onProgress, onCommentAdded }: VideoPlayerProps) {
+export default function VideoPlayer({ materialId, src, title, comments, resumeSecond, initialPercent = 0, onProgress, onCommentAdded }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
@@ -42,6 +43,7 @@ export default function VideoPlayer({ materialId, src, title, comments, resumeSe
   const watchedRef = useRef({ seconds: 0, last: 0 });
   const resumeAppliedRef = useRef(false);
   const autoSaveRef = useRef({ at: 0, position: 0, duration: 0 });
+  const highWaterRef = useRef({ position: resumeSecond ?? 0, percent: Math.max(0, Math.min(100, initialPercent)) });
   // 父组件（CourseDetail）每次渲染都会传入新的 inline onProgress 闭包；若把它的身份当依赖，
   // “保存进度”的 effect 会随父渲染反复重建，cleanup 里的 saveNow 再次触发 mutation，
   // 形成“上报 → mutation 状态更新 → 父重渲染 → effect 重建再上报”的更新风暴
@@ -88,7 +90,12 @@ export default function VideoPlayer({ materialId, src, title, comments, resumeSe
   // 统一进度上报：percent 按观看比例换算，看完 92% 记为 100。
   // 回调与时长经 ref 读取，依赖为空以保持身份稳定（见 onProgressRef 注释）。
   const report = useCallback((position: number, percent?: number) => {
-    onProgressRef.current({ position, percent: percent ?? videoPercent(position, durationRef.current), watchedSeconds: watchedRef.current.seconds });
+    const nextPercent = percent ?? videoPercent(position, durationRef.current);
+    highWaterRef.current = {
+      position: Math.max(highWaterRef.current.position, position),
+      percent: Math.max(highWaterRef.current.percent, nextPercent),
+    };
+    onProgressRef.current({ ...highWaterRef.current, watchedSeconds: watchedRef.current.seconds });
   }, []);
 
   const togglePlay = useCallback(() => {

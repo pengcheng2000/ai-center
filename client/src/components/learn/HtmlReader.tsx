@@ -2,10 +2,10 @@ import { cn } from "@/lib/utils";
 import { ExternalLink, Maximize2, Minimize2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-export type HtmlReaderProps = { html: string; title: string; sourceUrl?: string | null; onProgress?: (percent: number) => void };
+export type HtmlReaderProps = { html: string; title: string; sourceUrl?: string | null; initialPercent?: number; onProgress?: (percent: number) => void };
 
 /** 服务端已清洗快照阅读器：不在客户端重新解析或拼接 HTML，避免把未信任内容引入 DOM。 */
-export default function HtmlReader({ html, title, sourceUrl, onProgress }: HtmlReaderProps) {
+export default function HtmlReader({ html, title, sourceUrl, initialPercent = 0, onProgress }: HtmlReaderProps) {
   const [immersive, setImmersive] = useState(false);
   const hostRef = useRef<HTMLElement>(null);
   const onProgressRef = useRef(onProgress);
@@ -13,19 +13,19 @@ export default function HtmlReader({ html, title, sourceUrl, onProgress }: HtmlR
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    let reportedBucket = -1;
+    let reportedPercent = Math.max(0, Math.min(100, initialPercent));
     const measure = () => {
       const max = host.scrollHeight - host.clientHeight;
       const raw = max > 0 ? host.scrollTop / max * 100 : 100;
       const percent = Math.max(0, Math.min(100, Math.round(raw)));
-      const bucket = Math.min(5, Math.floor(percent / 20));
-      if (bucket !== reportedBucket) { reportedBucket = bucket; onProgressRef.current?.(bucket === 5 ? 100 : bucket * 20); }
+      const bucketPercent = Math.min(100, Math.floor(percent / 20) * 20);
+      if (bucketPercent > reportedPercent) { reportedPercent = bucketPercent; onProgressRef.current?.(bucketPercent); }
     };
     measure();
     host.addEventListener("scroll", measure, { passive: true });
     return () => host.removeEventListener("scroll", measure);
-  }, []);
-  return <div className={cn("overflow-hidden rounded-xl border border-slate-200 bg-white", immersive && "fixed inset-4 z-50 overflow-auto shadow-2xl")}>
+  }, [initialPercent]);
+  return <div className={cn("overflow-hidden rounded-xl border border-slate-200 bg-white", immersive && "fixed inset-4 z-40 overflow-auto shadow-2xl")}>
     <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-2.5">
       <span className="truncate text-xs font-semibold text-violet-700">{title} · HTML 快照</span>
       <div className="flex shrink-0 items-center gap-2">

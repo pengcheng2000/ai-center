@@ -121,3 +121,7 @@ client/public/__manus__/version.json
 
 # ZCode 会话目录（不入库）
 .zcode/
+
+# 测试产物（不入库）
+gui-test-screenshots/
+codex-deep-test-artifacts/

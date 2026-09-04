@@ -2,11 +2,27 @@
 // 支持多轮对话、按页面类型变化的快捷指令；后端注入平台功能知识库作答。
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import { collectPageContext, quickPromptsFor, resolvePageKind } from "@/lib/pageContext";
+import { assistantHistoryMessages } from "@/lib/assistantHistory";
+import {
+  collectPageContext,
+  quickPromptsFor,
+  resolvePageKind,
+} from "@/lib/pageContext";
 import { cn } from "@/lib/utils";
-import { BookOpenText, Loader2, MapPin, MessageCircleQuestion, Send, Sparkles, TextSelect, Trash2, X } from "lucide-react";
+import {
+  BookOpenText,
+  Loader2,
+  MapPin,
+  MessageCircleQuestion,
+  Send,
+  Sparkles,
+  TextSelect,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Streamdown } from "streamdown";
@@ -26,6 +42,17 @@ export default function AIAssistantBall() {
   const bodyRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const historyLoadedRef = useRef(false);
+  const historyQuery = trpc.platform.assistant.history.useQuery(undefined, {
+    enabled: isAuthenticated && open,
+    staleTime: 30_000,
+  });
+  const clearHistory = trpc.platform.assistant.clearHistory.useMutation({
+    onSuccess: () => {
+      setMessages([]);
+      utils.platform.assistant.history.setData(undefined, []);
+    },
+  });
 
   const kind = useMemo(() => resolvePageKind(location).kind, [location]);
   const prompts = useMemo(() => quickPromptsFor(kind), [kind]);
@@ -33,11 +60,21 @@ export default function AIAssistantBall() {
   useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
+    if (!historyQuery.data || historyLoadedRef.current) return;
+    setMessages(assistantHistoryMessages(historyQuery.data));
+    historyLoadedRef.current = true;
+  }, [historyQuery.data]);
+
+  useEffect(() => {
     if (!open) return;
-    const updateSelection = () => setSelection(window.getSelection()?.toString().trim().slice(0, 4_000) ?? "");
+    const updateSelection = () =>
+      setSelection(
+        window.getSelection()?.toString().trim().slice(0, 4_000) ?? ""
+      );
     updateSelection();
     document.addEventListener("selectionchange", updateSelection);
-    return () => document.removeEventListener("selectionchange", updateSelection);
+    return () =>
+      document.removeEventListener("selectionchange", updateSelection);
   }, [open, location]);
 
   useEffect(() => {
@@ -47,27 +84,37 @@ export default function AIAssistantBall() {
 
   useEffect(() => {
     if (!open) return;
-    const handler = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (panelRef.current?.contains(target) || target.closest("[data-assistant-trigger]")) return;
-      setOpen(false);
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
     };
-    window.addEventListener("mousedown", handler);
-    return () => window.removeEventListener("mousedown", handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [open]);
 
   const updateAssistantMessage = (index: number, content: string) => {
-    setMessages(prev => prev.map((message, messageIndex) => messageIndex === index ? { ...message, content } : message));
+    setMessages(prev =>
+      prev.map((message, messageIndex) =>
+        messageIndex === index ? { ...message, content } : message
+      )
+    );
   };
 
   const send = async (text: string) => {
     const question = text.trim();
     if (!question || isStreaming) return;
     const context = collectPageContext(location, utils);
-    const history = messages.slice(-16);
-    const assistantIndex = messages.length + 1;
-    setMessages(prev => [...prev, { role: "user", content: question }, { role: "assistant", content: "" }]);
+    const baseMessages =
+      !historyLoadedRef.current && historyQuery.data
+        ? assistantHistoryMessages(historyQuery.data)
+        : messages;
+    historyLoadedRef.current = true;
+    const history = baseMessages.slice(-16);
+    const assistantIndex = baseMessages.length + 1;
+    setMessages([
+      ...baseMessages,
+      { role: "user", content: question },
+      { role: "assistant", content: "" },
+    ]);
     setDraft("");
     setIsStreaming(true);
     const controller = new AbortController();
@@ -77,12 +124,17 @@ export default function AIAssistantBall() {
       const response = await fetch("/api/assistant/stream", {
         method: "POST",
         credentials: "include",
-        headers: { "content-type": "application/json", accept: "text/event-stream" },
+        headers: {
+          "content-type": "application/json",
+          accept: "text/event-stream",
+        },
         body: JSON.stringify({ question, pageContext: context, history }),
         signal: controller.signal,
       });
       if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        const payload = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         throw new Error(payload?.error || `请求失败（${response.status}）`);
       }
       if (!response.body) throw new Error("浏览器不支持流式响应");
@@ -93,7 +145,11 @@ export default function AIAssistantBall() {
       let answer = "";
       let completed = false;
       const consume = (rawEvent: string) => {
-        const data = rawEvent.split(/\r?\n/).filter(line => line.startsWith("data:")).map(line => line.slice(5).trim()).join("\n");
+        const data = rawEvent
+          .split(/\r?\n/)
+          .filter(line => line.startsWith("data:"))
+          .map(line => line.slice(5).trim())
+          .join("\n");
         if (!data) return;
         const event = JSON.parse(data) as StreamEvent;
         if (event.text) {
@@ -113,9 +169,13 @@ export default function AIAssistantBall() {
       }
       if (buffer.trim()) consume(buffer);
       if (!completed) throw new Error("流式回答未正常结束，请重试");
+      void utils.platform.assistant.history.invalidate();
     } catch (error) {
       if (controller.signal.aborted) return;
-      updateAssistantMessage(assistantIndex, `出错了：${error instanceof Error ? error.message : "AI 助手暂时不可用"}`);
+      updateAssistantMessage(
+        assistantIndex,
+        `出错了：${error instanceof Error ? error.message : "AI 助手暂时不可用"}`
+      );
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
       setIsStreaming(false);
@@ -125,28 +185,216 @@ export default function AIAssistantBall() {
   if (authLoading || !isAuthenticated || location === "/login") return null;
 
   const pageLabel: Record<string, string> = {
-    home: "工作台", learn: "学习中心", learningPath: "学习路径", course: "课程学习页",
-    newsList: "AI 资讯", newsArticle: "资讯文章", communityList: "实践社区", postDetail: "帖子详情",
-    skillsHub: "Skills 广场", skillDetail: "Skills 详情", profile: "个人空间", operations: "运营管理", apps: "应用中心", other: "当前页面",
+    home: "工作台",
+    learn: "学习中心",
+    learningPath: "学习路径",
+    course: "课程学习页",
+    newsList: "AI 资讯",
+    newsArticle: "资讯文章",
+    communityList: "实践社区",
+    postDetail: "帖子详情",
+    skillsHub: "Skills 广场",
+    skillDetail: "Skills 详情",
+    profile: "个人空间",
+    operations: "运营管理",
+    apps: "应用中心",
+    other: "当前页面",
   };
 
-  return <div ref={panelRef} className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[55] flex flex-col items-end gap-3 sm:inset-x-auto sm:bottom-6 sm:right-6">
-    {open && <div className="flex h-[min(70dvh,640px)] max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom))] w-full max-w-[440px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-violet-900/15 sm:w-[min(92vw,440px)]">
-      <div className="flex items-center gap-2.5 bg-gradient-to-r from-violet-700 to-indigo-700 px-4 py-3 text-white">
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/15"><Sparkles className="h-4 w-4" /></span>
-        <div className="min-w-0 flex-1"><p className="text-sm font-semibold">AI 助手小智</p><p className="flex items-center gap-1 truncate text-[11px] text-violet-200"><MapPin className="h-3 w-3 shrink-0" />正在阅读：{pageLabel[kind] ?? "当前页面"}</p></div>
-        {messages.length > 0 && <button onClick={() => setMessages([])} aria-label="清空对话" className="grid h-7 w-7 place-items-center rounded-lg transition hover:bg-white/15"><Trash2 className="h-3.5 w-3.5" /></button>}
-        <button onClick={() => setOpen(false)} aria-label="收起" className="grid h-7 w-7 place-items-center rounded-lg transition hover:bg-white/15"><X className="h-3.5 w-3.5" /></button>
-      </div>
-      <div ref={bodyRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/60 p-3.5">
-        {messages.length === 0 && <div className="flex h-full flex-col items-center justify-center gap-4 p-4 text-center"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-100 to-indigo-100"><MessageCircleQuestion className="h-6 w-6 text-violet-600" /></span><div><p className="text-sm font-semibold text-slate-700">我能读懂你正在看的页面</p><p className="mt-1.5 text-xs leading-5 text-slate-500">指导平台使用、总结文章内容、解释选中文字、解答 AI 问题都可以找我。</p></div>{selection && <p className="w-full rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-left text-[11px] leading-4 text-amber-800"><TextSelect className="mr-1 inline h-3 w-3" />检测到你选中了文字，可以直接让我解释它。</p>}<div className="flex flex-wrap justify-center gap-1.5">{prompts.map(prompt => <button key={prompt} onClick={() => void send(prompt)} disabled={isStreaming} className="rounded-full border border-violet-200 bg-white px-3 py-1.5 text-[11px] font-medium text-violet-700 transition hover:bg-violet-50 disabled:opacity-50">{prompt}</button>)}</div></div>}
-        {messages.map((message, index) => <div key={index} className={cn("flex gap-2", message.role === "user" ? "justify-end" : "justify-start")}>{message.role === "assistant" && <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white"><Sparkles className="h-3.5 w-3.5" /></span>}<div className={cn("max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-6", message.role === "user" ? "bg-violet-600 text-white" : "border border-slate-200 bg-white text-slate-800 shadow-sm")}>{message.role === "assistant" ? (message.content ? <div className="prose prose-sm max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 prose-headings:mt-2 prose-headings:mb-1"><Streamdown>{message.content}</Streamdown></div> : <div className="flex items-center gap-2 text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin" />正在生成回答…</div>) : <p className="whitespace-pre-wrap">{message.content}</p>}</div>{message.role === "user" && <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600">我</span>}</div>)}
-      </div>
-      {selection && messages.length > 0 && <p className="mx-3.5 mb-1.5 truncate rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800"><TextSelect className="mr-1 inline h-3 w-3" />已捕获选中文字（{selection.length} 字），提问会带上它</p>}
-      <div className="border-t border-slate-100 p-3"><div className="flex items-end gap-2"><Textarea value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(draft); } }} placeholder="问我任何问题，或让我总结当前页面…" className="max-h-28 min-h-10 flex-1 resize-none text-sm" /><Button disabled={!draft.trim() || isStreaming} onClick={() => void send(draft)} className="h-10 shrink-0 rounded-lg bg-violet-600 hover:bg-violet-500">{isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button></div><p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-400"><BookOpenText className="h-3 w-3" />助手能看到当前页面标题与正文摘录 · 回答由企业模型网关生成</p></div>
-    </div>}
-    <button data-assistant-trigger onClick={() => setOpen(value => !value)} aria-label="AI 助手" className={cn("grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white shadow-xl shadow-violet-900/30 transition hover:scale-105", isStreaming && open && "animate-none")}>
-      {isStreaming ? <Loader2 className="h-6 w-6 animate-spin" /> : open ? <X className="h-6 w-6" /> : <MessageCircleQuestion className="h-6 w-6" />}
-    </button>
-  </div>;
+  return (
+    <div
+      ref={panelRef}
+      className="fixed inset-x-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-end gap-3 sm:inset-x-auto sm:bottom-6 sm:right-6"
+    >
+      {open && (
+        <div className="flex h-[min(70dvh,640px)] max-h-[calc(100dvh-7rem-env(safe-area-inset-bottom))] w-full max-w-[440px] flex-col overflow-hidden rounded-3xl border border-[#d5dae5] bg-white shadow-2xl sm:w-[min(92vw,440px)]">
+          <div className="flex items-center gap-2.5 border-b border-[#dce1e9] bg-gradient-to-r from-[#e7eaf2] via-[#edf0f4] to-[#e8f0f0] px-4 py-3.5 text-slate-800">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#596287] text-white shadow-sm">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">AI 助手小智</p>
+              <p className="flex items-center gap-1 truncate text-[11px] text-slate-500">
+                <MapPin className="h-3 w-3 shrink-0" />
+                正在阅读：{pageLabel[kind] ?? "当前页面"}
+              </p>
+            </div>
+            {messages.length > 0 && (
+              <ConfirmActionDialog
+                title="清空 AI 助手历史？"
+                description="将永久删除当前账号的全部助手问答记录，此操作无法撤销。"
+                confirmLabel="确认清空"
+                pending={clearHistory.isPending}
+                onConfirm={() => clearHistory.mutate()}
+                trigger={
+                  <button
+                    disabled={clearHistory.isPending}
+                    aria-label="清空对话"
+                    className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 transition hover:bg-white/70 hover:text-slate-800 disabled:opacity-50"
+                  >
+                    {clearHistory.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                }
+              />
+            )}
+            <button
+              onClick={() => setOpen(false)}
+              aria-label="收起"
+              className="grid h-7 w-7 place-items-center rounded-lg text-slate-500 transition hover:bg-white/70 hover:text-slate-800"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div
+            ref={bodyRef}
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-[#f6f6f3] p-3.5"
+          >
+            {messages.length === 0 && (
+              <div className="flex h-full flex-col items-center justify-center gap-4 p-4 text-center">
+                {historyQuery.isLoading ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
+                ) : (
+                  <>
+                    <span className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#e2e6f0] to-[#dce9e8]">
+                      <MessageCircleQuestion className="h-6 w-6 text-[#596287]" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">
+                        我能读懂你正在看的页面
+                      </p>
+                      <p className="mt-1.5 text-xs leading-5 text-slate-500">
+                        指导平台使用、总结文章内容、解释选中文字、解答 AI
+                        问题都可以找我。
+                      </p>
+                    </div>
+                    {selection && (
+                      <p className="w-full rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-left text-[11px] leading-4 text-amber-800">
+                        <TextSelect className="mr-1 inline h-3 w-3" />
+                        检测到你选中了文字，可以直接让我解释它。
+                      </p>
+                    )}
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {prompts.map(prompt => (
+                        <button
+                          key={prompt}
+                          onClick={() => void send(prompt)}
+                          disabled={isStreaming}
+                          className="rounded-full border border-[#cfd5e2] bg-white px-3 py-1.5 text-[11px] font-medium text-[#505a7d] transition hover:bg-[#e9ecf4] disabled:opacity-50"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "flex min-w-0 gap-2",
+                  message.role === "user" ? "justify-end" : "justify-start"
+                )}
+              >
+                {message.role === "assistant" && (
+                  <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dfe4ee] text-[#505a7d]">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </span>
+                )}
+                <div
+                  className={cn(
+                    "min-w-0 max-w-[85%] overflow-hidden rounded-xl px-3.5 py-2.5 text-sm leading-6",
+                    message.role === "user"
+                      ? "bg-[#596287] text-white"
+                      : "border border-slate-200 bg-white text-slate-800 shadow-sm"
+                  )}
+                >
+                  {message.role === "assistant" ? (
+                    message.content ? (
+                      <div className="prose prose-sm min-w-0 max-w-none break-words prose-p:my-1.5 prose-ul:my-1.5 prose-li:my-0.5 prose-headings:mt-2 prose-headings:mb-1 prose-pre:max-w-full prose-pre:overflow-x-auto prose-table:block prose-table:max-w-full prose-table:overflow-x-auto">
+                        <Streamdown>{message.content}</Streamdown>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        正在生成回答…
+                      </div>
+                    )
+                  ) : (
+                    <p className="whitespace-pre-wrap break-words">
+                      {message.content}
+                    </p>
+                  )}
+                </div>
+                {message.role === "user" && (
+                  <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600">
+                    我
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+          {selection && messages.length > 0 && (
+            <p className="mx-3.5 mb-1.5 truncate rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+              <TextSelect className="mr-1 inline h-3 w-3" />
+              已捕获选中文字（{selection.length} 字），提问会带上它
+            </p>
+          )}
+          <div className="border-t border-slate-100 p-3">
+            <div className="flex items-end gap-2">
+              <Textarea
+                value={draft}
+                onChange={event => setDraft(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void send(draft);
+                  }
+                }}
+                placeholder="问我任何问题，或让我总结当前页面…"
+                className="max-h-28 min-h-10 flex-1 resize-none text-sm"
+              />
+              <Button
+                disabled={!draft.trim() || isStreaming}
+                onClick={() => void send(draft)}
+                className="h-10 shrink-0 rounded-lg bg-[#596287] hover:bg-[#4c5575]"
+              >
+                {isStreaming ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            <p className="mt-1.5 flex items-center gap-1 text-[10px] text-slate-400">
+              <BookOpenText className="h-3 w-3" />
+              助手能看到当前页面标题与正文摘录 · 回答由企业模型网关生成
+            </p>
+          </div>
+        </div>
+      )}
+      <button
+        data-assistant-trigger
+        onClick={() => setOpen(value => !value)}
+        aria-label="AI 助手"
+        className={cn(
+          "grid h-14 w-14 place-items-center rounded-full border border-white/45 bg-gradient-to-br from-[#687398] to-[#4b7082] text-white shadow-[0_12px_30px_rgba(75,112,130,.28)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(75,112,130,.34)]",
+          isStreaming && open && "animate-none"
+        )}
+      >
+        {isStreaming ? (
+          <Loader2 className="h-6 w-6 animate-spin" />
+        ) : open ? (
+          <X className="h-6 w-6" />
+        ) : (
+          <MessageCircleQuestion className="h-6 w-6" />
+        )}
+      </button>
+    </div>
+  );
 }

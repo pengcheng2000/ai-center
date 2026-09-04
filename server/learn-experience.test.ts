@@ -55,22 +55,25 @@ describe("素材进度与标注路由", () => {
 
   it("保存素材进度时按素材均值重算课程进度并写完成时间", async () => {
     const inserts: Record<string, unknown>[] = [];
+    const updates: Record<string, unknown>[] = [];
     const material = { material: { materialType: "document", mimeType: "text/markdown", courseId: 5 }, lifecycleStatus: "published" };
     const selects: Array<() => unknown> = [
       () => chain([material]),
-      () => chain([{ materialId: 1, percent: 100, minutes: 4 }]),
+      () => chain([{ id: 9, userId: 7, materialId: 2, position: 0, percent: 60, minutes: 7 }]),
       () => chain([{ id: 1 }, { id: 2 }]),
       () => chain([{ materialId: 1, percent: 100 }, { materialId: 2, percent: 60 }]),
+      () => chain([{ progress: 80 }]),
     ];
     mocks.getDb.mockResolvedValue({
       select: vi.fn(() => { const builder = selects.shift()!; return builder(); }),
-      insert: vi.fn(() => ({ values: vi.fn((value: unknown) => { inserts.push(value); return { onDuplicateKeyUpdate: async () => undefined }; }) })),
+      insert: vi.fn(() => ({ values: vi.fn((value: unknown) => { inserts.push(value); return { onDuplicateKeyUpdate: async ({ set }: { set: Record<string, unknown> }) => { updates.push(set); } }; }) })),
     });
     const employee = platformRouter.createCaller(ctx("user"));
     await expect(employee.learning.saveMaterialProgress({ materialId: 2, position: 0, percent: 60, minutesDelta: 3 })).resolves.toMatchObject({ materialPercent: 60, coursePercent: 80 });
     expect(inserts).toHaveLength(2);
-    expect(inserts[0]).toMatchObject({ userId: 7, materialId: 2, percent: 60, minutes: 7 });
+    expect(inserts[0]).toMatchObject({ userId: 7, materialId: 2, percent: 60, minutes: 3 });
     expect(inserts[1]).toMatchObject({ userId: 7, courseId: 5, progress: 80, lastMaterialId: 2 });
+    expect(updates).toHaveLength(2);
   });
 
   it("视频文件误标为文档时仍按视频记录秒数进度以支持续播", async () => {
@@ -78,9 +81,10 @@ describe("素材进度与标注路由", () => {
     const material = { material: { materialType: "document", mimeType: "video/mp4", courseId: 5 }, lifecycleStatus: "published" };
     const selects: Array<() => unknown> = [
       () => chain([material]),
-      () => chain([]),
+      () => chain([{ id: 9, userId: 7, materialId: 1, position: 42, percent: 55, minutes: 1 }]),
       () => chain([{ id: 1 }]),
-      () => chain([]),
+      () => chain([{ materialId: 1, percent: 55 }]),
+      () => chain([{ progress: 55 }]),
     ];
     mocks.getDb.mockResolvedValue({
       select: vi.fn(() => { const builder = selects.shift()!; return builder(); }),
@@ -155,5 +159,15 @@ describe("平台 AI 助手路由", () => {
     expect(ASSISTANT_SYSTEM_PROMPT).toContain("{{PAGE_CONTEXT}}");
     expect(ASSISTANT_SYSTEM_PROMPT).toContain("学习中心");
     expect(ASSISTANT_SYSTEM_PROMPT).toContain("弹幕");
+  });
+
+  it("清空历史通过当前登录用户作用域执行", async () => {
+    const where = vi.fn().mockResolvedValue(undefined);
+    const remove = vi.fn(() => ({ where }));
+    mocks.getDb.mockResolvedValue({ delete: remove });
+    const employee = platformRouter.createCaller(ctx("user"));
+    await expect(employee.assistant.clearHistory()).resolves.toEqual({ success: true });
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(where).toHaveBeenCalledTimes(1);
   });
 });
