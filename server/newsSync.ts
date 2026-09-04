@@ -4,9 +4,6 @@ import { extractOriginalSourceUrl, stripAggregatorFootnotes } from "../shared/ne
 import { getDb } from "./db";
 import { fetchRssEntries } from "./rss";
 
-// 每日同步计划（UTC 01:00 = 中国标准时间 09:00）。本地定时器与业务表共用该常量。
-export const DAILY_SYNC_CRON = "0 0 1 * * *";
-
 export type RssSyncResult = { success: true; sourceId: number; sourceName: string; fetched: number; created: number; updated: number; skipped: number };
 
 export async function syncRssSourceById(sourceId: number, maxItems = 50): Promise<RssSyncResult> {

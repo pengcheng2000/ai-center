@@ -40,25 +40,25 @@ export default function Home() {
   const favorites = personal?.favorites ?? [];
   return (
     <PlatformShell>
-      <main className="mx-auto max-w-[1600px] px-4 py-6 lg:px-7">
-        <div className="flex flex-col justify-between gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:flex-row lg:items-center">
+      <main className="mx-auto max-w-[1400px] px-4 py-6 lg:px-7">
+        <div className="flex flex-col justify-between gap-5 rounded-xl border border-gray-200 bg-white p-5 lg:flex-row lg:items-center">
           <div>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-gray-500">
               {isAuthenticated
-                ? `早上好，${user?.name || "同事"}`
+                ? `${new Date().getHours() < 12 ? "早上好" : new Date().getHours() < 18 ? "下午好" : "晚上好"}，${user?.name || "同事"}`
                 : "企业 AI 能力工作台"}
             </p>
-            <h1 className="mt-1 font-serif text-3xl font-semibold">
+            <h1 className="mt-1 text-3xl font-semibold">
               今天，先完成一件能产生复利的事。
             </h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-gray-500">
               学习、资讯与实践不再分散；用你的工作台串起下一步行动。
             </p>
           </div>
           <div className="flex gap-2">
             <Button
               onClick={() => setLocation("/learn")}
-              className="rounded-lg bg-[#596287] text-white hover:bg-[#4c557f]"
+              className="rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
             >
               <BookOpenCheck className="mr-2 h-4 w-4" />
               继续学习
@@ -78,7 +78,7 @@ export default function Home() {
           </div>
         </div>
         <div className="mt-6 grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="section-kicker">NEXT ACTIONS</p>
@@ -103,22 +103,22 @@ export default function Home() {
               ).map(item => (
                 <article
                   key={item.path.id}
-                  className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                  className="rounded-xl border border-gray-100 bg-gray-50 p-4"
                 >
                   <div className="flex items-start justify-between">
-                    <span className="grid h-9 w-9 place-items-center rounded-lg bg-violet-100 text-violet-700">
+                    <span className="grid h-9 w-9 place-items-center rounded-lg bg-indigo-100 text-indigo-600">
                       <Sparkles className="h-4 w-4" />
                     </span>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-gray-400">
                       {item.path.duration}
                     </span>
                   </div>
                   <h3 className="mt-4 font-semibold">{item.path.title}</h3>
-                  <p className="mt-1 min-h-10 text-xs leading-5 text-slate-500">
+                  <p className="mt-1 min-h-10 text-xs leading-5 text-gray-500">
                     {item.reason}
                   </p>
                   <Progress value={item.progress} className="mt-4 h-1.5" />
-                  <div className="mt-2 flex justify-between text-xs text-slate-400">
+                  <div className="mt-2 flex justify-between text-xs text-gray-400">
                     <span>
                       {item.progress > 0
                         ? `已完成 ${item.progress}%`
@@ -131,7 +131,7 @@ export default function Home() {
                           item.path.id
                         )
                       }
-                      className="font-medium text-violet-700"
+                      className="font-medium text-indigo-600"
                     >
                       进入路径
                     </button>
@@ -140,17 +140,17 @@ export default function Home() {
               ))}
             </div>
           </section>
-          <section className="rich-panel-learning rounded-2xl p-5 shadow-sm">
+          <section className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-bold tracking-[.16em] text-white/65">
+                <p className="text-xs font-bold tracking-[.16em] text-indigo-400">
                   PERSONAL SIGNAL
                 </p>
-                <h2 className="mt-1 text-xl font-semibold">我的 AI 画像</h2>
+                <h2 className="mt-1 text-xl font-semibold text-gray-900">我的 AI 画像</h2>
               </div>
               <Flame className="h-5 w-5 text-orange-300" />
             </div>
-            <p className="mt-5 text-sm leading-6 text-white/78">
+            <p className="mt-5 text-sm leading-6 text-gray-600">
               {personal?.profile?.headline ||
                 "记录能力标签、兴趣方向与成长目标。"}
             </p>
@@ -162,26 +162,26 @@ export default function Home() {
                   .map(tag => (
                     <span
                       key={tag}
-                      className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-violet-100"
+                      className="rounded-full bg-indigo-100 px-2.5 py-1 text-xs text-indigo-700"
                     >
                       {tag}
                     </span>
                   ))
               ) : (
-                <span className="text-xs text-white/60">还没有标签</span>
+                <span className="text-xs text-gray-400">还没有标签</span>
               )}
             </div>
             <Button
               onClick={() => setLocation("/me")}
               variant="secondary"
-              className="mt-6 w-full rounded-lg bg-white text-slate-900 hover:bg-violet-50"
+              className="mt-6 w-full rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
             >
               维护我的画像
             </Button>
           </section>
         </div>
         <div className="mt-5 grid gap-5 xl:grid-cols-3">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <Header
               icon={Newspaper}
               title="收藏与资讯"
@@ -200,12 +200,12 @@ export default function Home() {
                       onClick={() =>
                         workbenchHandlers.openNewsArticle(setLocation, item.id)
                       }
-                      className="block w-full rounded-lg bg-slate-50 p-3 text-left hover:bg-violet-50"
+                      className="block w-full rounded-lg bg-gray-50 p-3 text-left hover:bg-blue-50"
                     >
                       <p className="line-clamp-2 text-sm font-medium">
                         {item.title}
                       </p>
-                      <p className="mt-1 text-xs text-violet-600">
+                      <p className="mt-1 text-xs text-blue-600">
                         {item.category}
                       </p>
                     </button>
@@ -215,7 +215,7 @@ export default function Home() {
               )}
             </div>
           </section>
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <Header
               icon={MessageSquareText}
               title="社区动态"
@@ -227,12 +227,12 @@ export default function Home() {
                   <button
                     key={post.id}
                     onClick={() => setLocation(`/community/${post.id}`)}
-                    className="block w-full rounded-lg bg-slate-50 p-3 text-left hover:bg-violet-50"
+                    className="block w-full rounded-lg bg-gray-50 p-3 text-left hover:bg-emerald-50"
                   >
                     <p className="line-clamp-1 text-sm font-medium">
                       {post.title}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs text-gray-500">
                       {authorName || "平台成员"} · {post.commentCount} 条讨论
                     </p>
                   </button>
@@ -242,7 +242,7 @@ export default function Home() {
               )}
             </div>
           </section>
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <Header
               icon={LayoutList}
               title="工作区快捷任务"
@@ -260,16 +260,16 @@ export default function Home() {
                           : "/me"
                       )
                     }
-                    className="flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-slate-50"
+                    className="flex w-full items-center gap-3 rounded-lg p-2 text-left hover:bg-gray-50"
                   >
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-violet-100 text-violet-700">
+                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-orange-100 text-orange-600">
                       <Sparkles className="h-3.5 w-3.5" />
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium">
                         {item.title}
                       </span>
-                      <span className="block truncate text-xs text-slate-500">
+                      <span className="block truncate text-xs text-gray-500">
                         {item.description}
                       </span>
                     </span>
@@ -302,12 +302,12 @@ function Header({
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-violet-50 text-violet-700">
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-gray-100 text-gray-600">
           <Icon className="h-4 w-4" />
         </span>
         <h2 className="font-semibold">{title}</h2>
       </div>
-      <button onClick={action} className="text-xs font-medium text-violet-700">
+      <button onClick={action} className="text-xs font-medium text-gray-600">
         查看全部
       </button>
     </div>
@@ -325,15 +325,15 @@ function Empty({
   actionLabel?: string;
 }) {
   return (
-    <div className="grid min-h-28 place-items-center rounded-lg border border-dashed border-slate-200 text-center">
+    <div className="grid min-h-28 place-items-center rounded-lg border border-dashed border-gray-200 text-center">
       <div>
-        <Icon className="mx-auto h-4 w-4 text-violet-500" />
-        <p className="mt-2 text-xs text-slate-500">{text}</p>
+        <Icon className="mx-auto h-4 w-4 text-gray-400" />
+        <p className="mt-2 text-xs text-gray-500">{text}</p>
         {action && (
           <button
             type="button"
             onClick={action}
-            className="mt-2 text-xs font-semibold text-violet-700 hover:underline"
+            className="mt-2 text-xs font-semibold text-indigo-600 hover:underline"
           >
             {actionLabel || "立即处理"}
           </button>

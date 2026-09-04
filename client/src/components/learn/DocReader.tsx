@@ -84,19 +84,19 @@ export default function DocReader({ content, title, initialPercent = 0, onProgre
     </div>
   </div>;
 
-  return <div ref={containerRef} className={cn(immersive ? "fixed inset-0 z-40 flex flex-col bg-[#f6f6f3]" : "overflow-hidden rounded-2xl border border-slate-200 bg-white")}>
-    <div className={cn("h-1 w-full shrink-0 bg-slate-100", immersive && "bg-violet-100")}><div className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-[width]" style={{ width: `${percent}%` }} /></div>
+  return <div ref={containerRef} className={cn(immersive ? "fixed inset-0 z-40 flex flex-col bg-gray-50" : "overflow-hidden rounded-xl border border-gray-200 bg-white")}>
+    <div className={cn("h-1 w-full shrink-0 bg-gray-100", immersive && "bg-indigo-100")}><div className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 transition-[width]" style={{ width: `${percent}%` }} /></div>
 
     {/* 工具栏：普通模式常驻；沉浸模式悬浮顶部自动隐藏 */}
     {immersive
       ? <div className={cn("pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 transition-opacity duration-300", chromeVisible ? "opacity-100" : "opacity-0")}>
         <div className="pointer-events-auto rounded-2xl border border-white/80 bg-white/92 px-4 py-2 shadow-xl backdrop-blur-xl">{toolbar}</div>
       </div>
-      : <div className="border-b border-slate-100 px-5 py-2.5">{toolbar}</div>}
+      : <div className="border-b border-gray-100 px-5 py-2.5">{toolbar}</div>}
 
     {/* 正文：限宽 42rem 舒适行长，字号可调 */}
-    <div ref={hostRef} className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-6", immersive ? "bg-[#f6f6f3]" : "bg-white")} style={immersive ? undefined : { maxHeight: "min(72vh, 860px)" }}>
-      <article className={cn("prose prose-slate mx-auto max-w-[42rem] prose-headings:font-serif prose-p:leading-[1.95]", FONT_SIZES[fontStep])}>
+    <div ref={hostRef} className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-6", immersive ? "bg-gray-50" : "bg-white")} style={immersive ? undefined : { maxHeight: "min(72vh, 860px)" }}>
+      <article className={cn("prose prose-gray mx-auto max-w-[42rem] prose-headings:font-serif prose-p:leading-[1.95]", FONT_SIZES[fontStep])}>
         <Streamdown>{content}</Streamdown>
       </article>
       {immersive && <p className="mx-auto mt-8 max-w-[42rem] text-center text-xs text-slate-400">— 已读完本篇 · 滚动或按 Esc 退出 —</p>}

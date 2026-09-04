@@ -11,7 +11,7 @@ export default function NotFound() {
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-[#f6f6f3] px-4">
+    <div className="flex min-h-screen w-full items-center justify-center bg-white px-4">
       <Card className="w-full max-w-lg border-white/90 bg-white/90 shadow-xl backdrop-blur-sm">
         <CardContent className="pb-9 pt-9 text-center">
           <div className="mb-6 flex justify-center">
@@ -20,13 +20,13 @@ export default function NotFound() {
             </div>
           </div>
 
-          <h1 className="mb-2 text-4xl font-semibold tracking-[-0.05em] text-slate-900">404</h1>
+          <h1 className="mb-2 text-4xl font-semibold tracking-[-0.05em] text-gray-900">404</h1>
 
-          <h2 className="mb-4 text-xl font-semibold text-slate-700">
+          <h2 className="mb-4 text-xl font-semibold text-gray-700">
             页面暂时找不到
           </h2>
 
-          <p className="mb-8 leading-relaxed text-slate-500">
+          <p className="mb-8 leading-relaxed text-gray-500">
             这个地址可能已经移动、删除，或暂时不可访问。
           </p>
 

@@ -21,6 +21,8 @@ import {
   llmModels,
   llmProviders,
   modelRoutingPolicies,
+  newsDigests,
+  newsDigestSettings,
   newsFavorites,
   newsReadEvents,
   newsItems,
@@ -208,13 +210,15 @@ export function countResourceGaps<T extends { id: number; resourceUrl: string | 
 export async function getPublicCatalog(category?: string, fullTextOnly = false) {
   await ensurePlatformBootstrap();
   const db = await getDb();
-  if (!db) return { paths: [], courses: [], news: [], newsCategories: [], modules: [], apps: [], posts: [] };
+  if (!db) return { paths: [], courses: [], news: [], newsDigest: null, newsCategories: [], modules: [], apps: [], posts: [] };
   const fullTextCondition = sql`char_length(coalesce(${newsItems.content}, '')) > char_length(${newsItems.summary}) + 80`;
   const visibleNews = and(eq(newsItems.isDeleted, 0), eq(newsItems.reviewStatus, "approved"), category ? eq(newsItems.category, category) : undefined, fullTextOnly ? fullTextCondition : undefined);
-  const [paths, courseRows, news, newsCategories, modules, apps, posts, readStats, favoriteStats] = await Promise.all([
+  const [latestDigest] = await db.select().from(newsDigests).orderBy(desc(newsDigests.generatedAt)).limit(1);
+  const [paths, courseRows, news, digestNews, newsCategories, modules, apps, posts, readStats, favoriteStats] = await Promise.all([
     db.select().from(learningPaths).where(eq(learningPaths.isPublished, 1)).orderBy(desc(learningPaths.isFeatured), asc(learningPaths.id)),
     db.select().from(courses).where(eq(courses.lifecycleStatus, "published")).orderBy(asc(courses.pathId), asc(courses.orderIndex)),
     db.select({ item: newsItems, sourceName: newsSources.name }).from(newsItems).leftJoin(newsSources, eq(newsItems.sourceId, newsSources.id)).where(visibleNews).orderBy(desc(newsItems.isFeatured), desc(newsItems.publishedAt)),
+    latestDigest ? db.select({ item: newsItems, sourceName: newsSources.name }).from(newsItems).leftJoin(newsSources, eq(newsItems.sourceId, newsSources.id)).where(and(eq(newsItems.digestId, latestDigest.id), eq(newsItems.reviewStatus, "approved"), eq(newsItems.isDeleted, 0))).orderBy(desc(newsItems.isFeatured), desc(newsItems.publishedAt)) : Promise.resolve([]),
     db.select({ category: newsItems.category }).from(newsItems).where(and(eq(newsItems.isDeleted, 0), eq(newsItems.reviewStatus, "approved"))).groupBy(newsItems.category),
     db.select().from(featureModules).where(and(eq(featureModules.isEnabled, 1), sql`${featureModules.audience} != 'admin'`)).orderBy(asc(featureModules.orderIndex)),
     db.select().from(enterpriseApps).where(and(eq(enterpriseApps.isEnabled, 1), sql`${enterpriseApps.audience} != 'admin'`)).orderBy(asc(enterpriseApps.orderIndex)),
@@ -223,7 +227,8 @@ export async function getPublicCatalog(category?: string, fullTextOnly = false) 
     db.select({ newsId: newsFavorites.newsId, count: sql<number>`count(*)` }).from(newsFavorites).groupBy(newsFavorites.newsId),
   ]);
   const catalogNews = shapeCatalogNews(news, readStats, favoriteStats);
-  return { paths, courses: filterPublishedCourses(courseRows), news: filterCatalogNews(catalogNews, fullTextOnly), newsCategories: newsCategories.map(item => item.category), modules, apps, posts };
+  const newsDigest = latestDigest ? { ...latestDigest, items: shapeCatalogNews(digestNews, readStats, favoriteStats) } : null;
+  return { paths, courses: filterPublishedCourses(courseRows), news: filterCatalogNews(catalogNews, fullTextOnly), newsDigest, newsCategories: newsCategories.map(item => item.category), modules, apps, posts };
 }
 
 export async function getPersonalSpaceByUserId(userId: number) {
@@ -267,9 +272,11 @@ export async function getOperationsData() {
   await ensurePlatformBootstrap();
   await ensureGovernanceBootstrap();
   const db = await getDb();
-  if (!db) return { sources: [], modules: [], apps: [], agents: [], rules: [], records: [], news: [], deletedNews: [], providers: [], models: [], policies: [], paths: [], courses: [], materials: [], topics: [], reviewers: [], importKeys: [], importJobs: [], metrics: { content: 0, pending: 0, learners: 0, posts: 0 }, learningMetrics: { publishedPaths: 0, totalPaths: 0, publishedCourses: 0, totalCourses: 0, resourceGaps: 0, reviewRisk: 0, completionRate: 0 } };
-  const [sources, modules, apps, agents, rules, records, news, deletedNews, providers, models, policies, paths, courseRows, materials, topics, reviewers, importKeys, importJobs, metrics, averageProgress] = await Promise.all([
+  if (!db) return { sources: [], digestSettings: { id: 1, isEnabled: 0, intervalHours: 24, scheduleCronTaskUid: null, lastRunAt: null, lastGeneratedAt: null, lastError: null, updatedAt: new Date() }, latestDigest: null, modules: [], apps: [], agents: [], rules: [], records: [], news: [], deletedNews: [], providers: [], models: [], policies: [], paths: [], courses: [], materials: [], topics: [], reviewers: [], importKeys: [], importJobs: [], metrics: { content: 0, pending: 0, learners: 0, posts: 0 }, learningMetrics: { publishedPaths: 0, totalPaths: 0, publishedCourses: 0, totalCourses: 0, resourceGaps: 0, reviewRisk: 0, completionRate: 0 } };
+  const [sources, digestSettingsRows, latestDigests, modules, apps, agents, rules, records, news, deletedNews, providers, models, policies, paths, courseRows, materials, topics, reviewers, importKeys, importJobs, metrics, averageProgress] = await Promise.all([
     db.select().from(newsSources).orderBy(desc(newsSources.updatedAt)),
+    db.select().from(newsDigestSettings).where(eq(newsDigestSettings.id, 1)).limit(1),
+    db.select().from(newsDigests).orderBy(desc(newsDigests.generatedAt)).limit(1),
     db.select().from(featureModules).orderBy(asc(featureModules.orderIndex)),
     db.select().from(enterpriseApps).orderBy(asc(enterpriseApps.orderIndex)),
     db.select().from(auditAgents).orderBy(desc(auditAgents.updatedAt)),
@@ -299,7 +306,8 @@ export async function getOperationsData() {
   const publishedCourses = courseRows.filter(item => item.lifecycleStatus === "published");
   const resourceGaps = countResourceGaps(publishedCourses, materials);
   const reviewRisk = [...paths, ...courseRows].filter(item => item.reviewStatus !== "current").length;
-  return { sources, modules, apps, agents, rules, records, news, deletedNews, providers, models, policies, paths, courses: courseRows, materials, topics, reviewers, importKeys, importJobs, metrics: { content: Number(metrics[0][0]?.count ?? 0), pending: Number(metrics[1][0]?.count ?? 0), learners: Number(metrics[2][0]?.count ?? 0), posts: Number(metrics[3][0]?.count ?? 0) }, learningMetrics: { publishedPaths, totalPaths: paths.length, publishedCourses: publishedCourses.length, totalCourses: courseRows.length, resourceGaps, reviewRisk, completionRate: Math.round(Number(averageProgress[0]?.average ?? 0)) } };
+  const digestSettings = digestSettingsRows[0] ?? { id: 1, isEnabled: 0, intervalHours: 24, scheduleCronTaskUid: null, lastRunAt: null, lastGeneratedAt: null, lastError: null, updatedAt: new Date() };
+  return { sources, digestSettings, latestDigest: latestDigests[0] ?? null, modules, apps, agents, rules, records, news, deletedNews, providers, models, policies, paths, courses: courseRows, materials, topics, reviewers, importKeys, importJobs, metrics: { content: Number(metrics[0][0]?.count ?? 0), pending: Number(metrics[1][0]?.count ?? 0), learners: Number(metrics[2][0]?.count ?? 0), posts: Number(metrics[3][0]?.count ?? 0) }, learningMetrics: { publishedPaths, totalPaths: paths.length, publishedCourses: publishedCourses.length, totalCourses: courseRows.length, resourceGaps, reviewRisk, completionRate: Math.round(Number(averageProgress[0]?.average ?? 0)) } };
 }
 
-export const tables = { auditAgents, auditRecords, auditRules, communityPosts, communityTopicFollows, communityTopics, courseProgress, enterpriseApps, featureModules, learningPaths, llmModels, llmProviders, modelRoutingPolicies, newsFavorites, newsItems, newsSources, postComments, postLikes, userProfiles, workspaceItems };
+export const tables = { auditAgents, auditRecords, auditRules, communityPosts, communityTopicFollows, communityTopics, courseProgress, enterpriseApps, featureModules, learningPaths, llmModels, llmProviders, modelRoutingPolicies, newsDigests, newsDigestSettings, newsFavorites, newsItems, newsSources, postComments, postLikes, userProfiles, workspaceItems };
