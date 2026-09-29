@@ -15,6 +15,7 @@
 - 数据：MySQL/TiDB、Drizzle ORM，Schema 与迁移位于 `drizzle/`。本地 MySQL 仅供开发；正式部署使用远程数据库，通过 DATABASE_URL 配置连接，开发数据不代表生产数据。
 - AI 与文件：配置式服务端 LLM 网关；文件当前存放 DATA_DIR/storage（默认 .data/storage），通过短期签名 URL 访问；已有课程资源流式上传与受控 Agent 内容导入，尚无 MinIO/OSS/S3 实现。
 - 鉴权：本地账号、scrypt 密码散列、JWT Cookie 会话；员工数据按当前用户隔离，运营能力由管理员 procedure 保护。尚未实现飞书 SSO、可信企业身份验证或飞书文档 ACL 映射。
+- Git 远端：`origin` 仍是公司 GitLab；`github` 指向公开仓库 `pengcheng2000/ai-center`，默认分支为 `main`。本地工作分支为 `feature/feishu-wiki-integration`；向 GitHub 同步时须显式指定 `github` 和 `main`，并保持 `.env`、`.data` 等敏感运行数据不入库。
 
 ## 已交付的主要能力
 
