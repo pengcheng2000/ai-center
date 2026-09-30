@@ -140,6 +140,11 @@ export default function LearningCenter() {
           </div>
         </div>
 
+        <button onClick={() => setLocation(workbenchRoutes.knowledge)} className="mt-6 flex w-full items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/60 p-5 text-left transition hover:border-indigo-200 hover:bg-indigo-50">
+          <span><span className="flex items-center gap-2 font-semibold text-indigo-900"><BookOpenCheck className="h-5 w-5" />知识与案例</span><span className="mt-1 block text-sm text-indigo-700">阅读经过负责人确认、由运营发布的企业知识与实践经验。</span></span>
+          <ArrowRight className="h-5 w-5 text-indigo-600" />
+        </button>
+
         {/* 统计条 + 继续学习 */}
         <section className="mt-6 grid gap-4 lg:grid-cols-[1fr_minmax(0,420px)]">
           <div className="grid grid-cols-3 gap-4">

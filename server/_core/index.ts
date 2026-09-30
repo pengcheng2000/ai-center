@@ -13,6 +13,10 @@ import { serveStatic, setupVite } from "./vite";
 import { registerScheduledNewsRoutes, restoreScheduledRssSyncJobs } from "../scheduledNews";
 import { registerAgentImportRoutes } from "../agentImport";
 import { registerAssistantStreamRoute } from "../assistantStream";
+import { registerKnowledgeAssetRoute } from "../knowledge/assetRoute";
+import { recoverKnowledgeStorage } from "../knowledge/recovery";
+import { ensureDefaultKnowledgeSource } from "../knowledge/repository";
+import { registerKnowledgeScheduledRoute, restoreKnowledgeSchedules } from "../knowledge/schedule";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -40,9 +44,11 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
+  registerKnowledgeAssetRoute(app);
   registerAuthRoutes(app);
   registerCourseMaterialUpload(app);
   registerScheduledNewsRoutes(app);
+  registerKnowledgeScheduledRoute(app);
   registerAgentImportRoutes(app);
   registerAssistantStreamRoute(app);
   // tRPC API
@@ -74,6 +80,10 @@ async function startServer() {
     void ensurePlatformBootstrap().catch(error => console.warn("[Bootstrap] 平台种子数据初始化失败:", error));
     void ensureGovernanceBootstrap().catch(error => console.warn("[Bootstrap] 模型治理数据初始化失败:", error));
     void restoreScheduledRssSyncJobs();
+    void ensureDefaultKnowledgeSource()
+      .then(() => recoverKnowledgeStorage())
+      .then(() => restoreKnowledgeSchedules())
+      .catch(() => console.warn("[Knowledge] 初始化或调度恢复失败；检查数据库迁移与存储配置"));
   });
 }
 

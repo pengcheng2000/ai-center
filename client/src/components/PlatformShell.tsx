@@ -25,7 +25,7 @@ const navigation = [
   { label: "Skills 广场", path: "/skills", icon: Puzzle },
 ];
 
-export default function PlatformShell({ children }: { children: ReactNode }) {
+export default function PlatformShell({ children, hideMobileNav = false }: { children: ReactNode; hideMobileNav?: boolean }) {
   const { user, isAuthenticated, loading, logout } = useAuth();
   const [location, setLocation] = useLocation();
   return (
@@ -106,7 +106,7 @@ export default function PlatformShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       <div className="pb-24 md:pb-0">{children}</div>
-      <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-6 rounded-xl border border-gray-200/80 bg-white/90 p-1.5 pb-[calc(.375rem+env(safe-area-inset-bottom))] shadow-lg backdrop-blur-xl md:hidden">
+      {!hideMobileNav && <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-6 rounded-xl border border-gray-200/80 bg-white/90 p-1.5 pb-[calc(.375rem+env(safe-area-inset-bottom))] shadow-lg backdrop-blur-xl md:hidden">
         {navigation.map(item => (
           <button
             key={item.path}
@@ -129,7 +129,7 @@ export default function PlatformShell({ children }: { children: ReactNode }) {
             </span>
           </button>
         ))}
-      </nav>
+      </nav>}
     </div>
   );
 }

@@ -41,7 +41,7 @@ export function safeImageTarget(url: string) {
 }
 
 /** Strip raw HTML and unsafe link targets so stored Markdown never carries executable markup. */
-export function sanitizeMarkdown(input: string) {
+export function sanitizeMarkdown(input: string, maxLength = MARKDOWN_MAX_LENGTH) {
   const withoutControl = input.replace(CONTROL_CHARS, "").replace(/\r\n?/g, "\n");
   // 先整块丢掉脚本/样式，避免只去标签留下裸露的脚本正文。
   const withoutScripts = withoutControl.replace(/<(script|style|iframe|object|embed)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "").replace(/<(script|style|iframe|object|embed)\b[^>]*>/gi, "");
@@ -51,7 +51,7 @@ export function sanitizeMarkdown(input: string) {
     if (safe) return `${bang}[${label}](${safe})`;
     return bang ? "" : label;
   });
-  return withSafeLinks.replace(/\n{3,}/g, "\n\n").trim().slice(0, MARKDOWN_MAX_LENGTH);
+  return withSafeLinks.replace(/\n{3,}/g, "\n\n").trim().slice(0, maxLength);
 }
 
 /** Convert legacy stored rich-text HTML into Markdown so old posts render through the same pipeline. */

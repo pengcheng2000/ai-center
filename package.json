@@ -9,6 +9,8 @@
     "start": "cross-env NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "knowledge:poc": "tsx server/knowledge/runFeishuPoc.ts",
+    "knowledge:maintain": "tsx server/knowledge/runMaintenance.ts",
+    "knowledge:verify": "tsx server/knowledge/experience.integration.ts",
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"

@@ -30,12 +30,16 @@ export default function Home() {
     enabled: isAuthenticated,
   });
   const { data: posts } = trpc.platform.community.list.useQuery();
+  const { data: knowledge } = trpc.knowledge.list.useQuery(undefined, { enabled: isAuthenticated });
   if (isLoading || !catalog)
     return (
       <PlatformShell>
         <PageSkeleton cards={3} />
       </PlatformShell>
     );
+  const featuredKnowledge = knowledge?.items.filter(item => item.editorial?.featured).slice(0, 3) ?? [];
+  const knowledgeCards = featuredKnowledge.length ? featuredKnowledge : (knowledge?.items.slice(0, 3) ?? []);
+  const knowledgeIsDevelopmentPreview = knowledgeCards[0]?.visibility === "development_preview";
   const progress = personal?.progress ?? [];
   const favorites = personal?.favorites ?? [];
   return (
@@ -77,6 +81,24 @@ export default function Home() {
             </Button>
           </div>
         </div>
+        {knowledgeCards.length > 0 && (
+          <section className="mt-5 rounded-xl border border-indigo-100 bg-indigo-50/50 p-5">
+            <div className="flex items-center justify-between">
+              <div><p className="section-kicker">KNOWLEDGE & CASES</p><h2 className="mt-1 text-lg font-semibold">{knowledgeIsDevelopmentPreview ? "知识库开发预览" : "精选知识与案例"}</h2></div>
+              <Button variant="ghost" size="sm" onClick={() => setLocation(workbenchRoutes.knowledge)}>查看全部 <ArrowRight className="ml-1 h-4 w-4" /></Button>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {knowledgeCards.map(item => (
+                <button key={item.publicationId ?? item.itemId} onClick={() => setLocation(workbenchRoutes.knowledgeDetail(item.itemId))} className="rounded-lg border border-indigo-100 bg-white p-4 text-left hover:border-indigo-300">
+                  <p className="text-xs text-indigo-600">{item.sourceName}</p>
+                  {item.visibility === "development_preview" && <p className="mt-1 text-[11px] text-amber-700">开发预览 · 未发布</p>}
+                  <p className="mt-2 line-clamp-2 font-semibold">{item.title}</p>
+                  <p className="mt-1 line-clamp-2 text-xs text-gray-500">{item.summary}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
         <div className="mt-6 grid gap-5 xl:grid-cols-[1.2fr_.8fr]">
           <section className="rounded-xl border border-gray-200 bg-white p-5">
             <div className="flex items-center justify-between">

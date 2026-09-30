@@ -24,6 +24,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  BookOpenCheck,
   Bot,
   CheckCircle2,
   Clock3,
@@ -450,6 +451,7 @@ export default function Operations() {
               <Sparkles className="mr-2 h-4 w-4" />
               学习内容运营
             </Button>
+            <Button onClick={() => setLocation("/operations/knowledge")} variant="outline"><BookOpenCheck className="mr-2 h-4 w-4" />企业知识管理</Button>
             <Button
               onClick={() => setLocation("/operations/governance")}
               variant="outline"

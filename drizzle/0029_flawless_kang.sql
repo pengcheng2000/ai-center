@@ -1,0 +1,1 @@
+ALTER TABLE `contentPublications` MODIFY COLUMN `audienceType` enum('verified_employees','authenticated_users','department','role','user') NOT NULL;

@@ -20,6 +20,7 @@ export type PdfReaderProps = {
   resumePage: number | null;
   initialPercent?: number;
   onProgress: (payload: { page: number; totalPages: number }) => void;
+  readOnly?: boolean;
 };
 
 type DraftRect = { x: number; y: number; w: number; h: number };
@@ -68,7 +69,7 @@ function PageCanvas({ doc, page, scale, onRendered, onError }: { doc: PdfDoc; pa
   return <canvas ref={canvasRef} className="block rounded-lg shadow-2xl shadow-black/40" style={{ width: size?.w, height: size?.h, visibility: size ? "visible" : "hidden" }} />;
 }
 
-export default function PdfReader({ materialId, src, annotations, resumePage, initialPercent = 0, onProgress }: PdfReaderProps) {
+export default function PdfReader({ materialId, src, annotations, resumePage, initialPercent = 0, onProgress, readOnly = false }: PdfReaderProps) {
   const docRef = useRef<PdfDoc | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -243,11 +244,11 @@ export default function PdfReader({ materialId, src, annotations, resumePage, in
       else if (event.key === "+" || event.key === "=") setScale(value => Math.min(2.5, value + 0.15));
       else if (event.key === "-") setScale(value => Math.max(MIN_PDF_SCALE, value - 0.15));
       else if (event.key.toLowerCase() === "f") void toggleImmersive();
-      else if (event.key.toLowerCase() === "a") setAnnotateMode(value => !value);
+      else if (event.key.toLowerCase() === "a" && !readOnly) setAnnotateMode(value => !value);
     };
     if (immersive || containerRef.current?.matches(":hover")) window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [goTo, page, immersive, toggleImmersive]);
+  }, [goTo, page, immersive, toggleImmersive, readOnly]);
 
   // 连续滚动模式：IntersectionObserver 找到视口顶部最近的一页作为当前页。
   useEffect(() => {
@@ -347,16 +348,16 @@ export default function PdfReader({ materialId, src, annotations, resumePage, in
     <button onClick={() => setMode(value => value === "scroll" ? "page" : "scroll")} title={mode === "scroll" ? "切换到单页阅读" : "切换到连续阅读（长文档按需渲染）"} className={cn("flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition", immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}>
       {mode === "scroll" ? <><Square className="h-3.5 w-3.5" />单页阅读</> : <><Rows3 className="h-3.5 w-3.5" />连续阅读</>}
     </button>
-    <button onClick={() => setAnnotateMode(value => !value)} title="标注模式（快捷键 A）" className={cn("flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition", annotateMode ? "bg-violet-600 text-white" : immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}>
+    {!readOnly && <button onClick={() => setAnnotateMode(value => !value)} title="标注模式（快捷键 A）" className={cn("flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition", annotateMode ? "bg-violet-600 text-white" : immersive ? "hover:bg-white/10" : "hover:bg-slate-100")}>
       {annotateMode ? <Highlighter className="h-3.5 w-3.5" /> : <MousePointer2 className="h-3.5 w-3.5" />}{annotateMode ? "标注中" : "选择"}
-    </button>
+    </button>}
     {annotateMode && <div className="flex items-center gap-1">{(Object.keys(ANNOTATION_COLOR_CLASSES) as Array<keyof typeof ANNOTATION_COLOR_CLASSES>).map(key => <button key={key} onClick={() => setColor(key)} aria-label={ANNOTATION_COLOR_CLASSES[key].label} className={cn("h-5 w-5 rounded-full border-2 transition", ANNOTATION_COLOR_CLASSES[key].dot, color === key ? "scale-110 border-slate-900 dark:border-white" : "border-white")} />)}</div>}
     <button onClick={() => void toggleImmersive()} title="沉浸阅读（快捷键 F）" className={cn("ml-auto flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition", immersive ? "bg-violet-600 text-white hover:bg-violet-500" : "bg-violet-50 text-violet-700 hover:bg-violet-100")}>
       {immersive ? <><Minimize2 className="h-3.5 w-3.5" />退出沉浸</> : <><Maximize2 className="h-3.5 w-3.5" />沉浸阅读</>}
     </button>
   </div>;
 
-  return <div className={cn(immersive ? "fixed inset-0 z-40 flex flex-col gap-3 bg-slate-900 p-3" : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]")}>
+  return <div className={cn(immersive ? "fixed inset-0 z-40 flex flex-col gap-3 bg-slate-900 p-3" : readOnly ? "grid gap-4" : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]")}>
     <div ref={containerRef} className={cn("flex min-h-0 flex-1 flex-col", immersive ? "p-3" : "")}>
       {/* 工具栏：普通模式常驻在阅读区上方；沉浸模式悬浮居中、自动隐藏 */}
       {immersive ? <div className={cn("pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2 transition-opacity duration-300", toolbarVisible ? "opacity-100" : "opacity-0")}>{toolbar}</div> : <div className="mb-3">{toolbar}</div>}
@@ -372,12 +373,12 @@ export default function PdfReader({ materialId, src, annotations, resumePage, in
 
       {/* 底部进度条 */}
       <div className={cn("flex items-center justify-between px-1 pt-2 text-[11px]", immersive ? "text-slate-400" : "text-slate-500")}>
-        <span className="flex items-center gap-1.5"><BookOpenText className="h-3.5 w-3.5" />{totalPages > 0 ? `阅读进度 ${pdfPercent(page, totalPages)}%` : "加载中…"} · 已标注 {annotations.length} 处</span>
-        <span className="hidden md:block">←/→ 翻页 · +/- 缩放 · A 标注 · F 沉浸</span>
+        <span className="flex items-center gap-1.5"><BookOpenText className="h-3.5 w-3.5" />{totalPages > 0 ? `阅读进度 ${pdfPercent(page, totalPages)}%` : "加载中…"}{!readOnly && ` · 已标注 ${annotations.length} 处`}</span>
+        <span className="hidden md:block">←/→ 翻页 · +/- 缩放{!readOnly && " · A 标注"} · F 沉浸</span>
       </div>
 
       {/* 标注笔记输入（浮在底部） */}
-      {pending && <div className={cn("mt-3 rounded-xl border p-4", immersive ? "border-violet-500/40 bg-slate-900" : "border-violet-200 bg-violet-50")}>
+      {!readOnly && pending && <div className={cn("mt-3 rounded-xl border p-4", immersive ? "border-violet-500/40 bg-slate-900" : "border-violet-200 bg-violet-50")}>
         <p className={cn("flex items-center gap-1.5 text-sm font-semibold", immersive ? "text-white" : "text-violet-800")}><StickyNote className="h-4 w-4" />为选中区域写一条标注（第 {pending.page} 页）</p>
         <div className="mt-2 flex gap-2">
           <Textarea value={note} onChange={event => setNote(event.target.value)} placeholder="例如：这里的数据口径要结合 Q3 复盘一起看" className={cn("min-h-10", immersive ? "border-white/15 bg-white/10 text-white placeholder:text-slate-500" : "bg-white")} />
@@ -390,7 +391,7 @@ export default function PdfReader({ materialId, src, annotations, resumePage, in
     </div>
 
     {/* 标注侧列：沉浸模式下也悬浮可用 */}
-    <aside className={cn("shrink-0 overflow-y-auto rounded-xl border p-4", immersive ? "hidden border-white/10 bg-slate-900 lg:block lg:max-h-64 xl:mt-3" : "border-slate-200 bg-white lg:max-h-[720px]")}>
+    {!readOnly && <aside className={cn("shrink-0 overflow-y-auto rounded-xl border p-4", immersive ? "hidden border-white/10 bg-slate-900 lg:block lg:max-h-64 xl:mt-3" : "border-slate-200 bg-white lg:max-h-[720px]")}>
       <div className="flex items-center justify-between">
         <p className={cn("flex items-center gap-1.5 text-sm font-semibold", immersive && "text-white")}><Highlighter className="h-4 w-4 text-violet-500" />我的标注</p>
         {!immersive && pageAnnotations.length > 0 && <span className="text-[11px] text-slate-400">本页 {pageAnnotations.length} 条</span>}
@@ -408,6 +409,6 @@ export default function PdfReader({ materialId, src, annotations, resumePage, in
       </div>
       {!immersive && <button onClick={() => void toggleImmersive()} className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg border border-violet-200 py-2 text-xs font-semibold text-violet-700 transition hover:bg-violet-50"><Maximize2 className="h-3.5 w-3.5" />进入沉浸阅读</button>}
       {immersive && <button onClick={() => void toggleImmersive()} className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/15 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/10"><X className="h-3.5 w-3.5" />退出沉浸模式</button>}
-    </aside>
+    </aside>}
   </div>;
 }

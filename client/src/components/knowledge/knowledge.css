@@ -1,0 +1,104 @@
+.knowledge-prose {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #1f2937;
+  overflow-wrap: anywhere;
+}
+.knowledge-prose :is(h1, h2, h3, h4, h5, h6) {
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.45;
+  margin: 2rem 0 1rem;
+  scroll-margin-top: 7rem;
+  color: #111827;
+}
+.knowledge-prose h2 {
+  font-size: 1.5rem;
+}
+.knowledge-prose h3 {
+  font-size: 1.25rem;
+}
+.knowledge-prose :is(h4, h5, h6) {
+  font-size: 1.0625rem;
+}
+[data-knowledge-admin="true"] .knowledge-prose :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 20rem;
+}
+.knowledge-prose p {
+  margin: 1rem 0;
+}
+.knowledge-prose p:empty {
+  display: none;
+}
+.knowledge-prose a {
+  color: #4338ca;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.knowledge-prose a:hover {
+  color: #312e81;
+}
+.knowledge-prose :is(a, button):focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 3px;
+}
+.knowledge-prose :is(ul, ol) {
+  padding-left: 1.5rem;
+  margin: 1rem 0;
+}
+.knowledge-prose li {
+  padding-left: 0.125rem;
+  margin: 0.35rem 0;
+}
+.knowledge-prose li > p {
+  margin: 0.35rem 0;
+}
+.knowledge-prose blockquote {
+  border-left: 3px solid #c7d2fe;
+  padding: 0.125rem 1rem;
+  margin: 1.5rem 0;
+  color: #4b5563;
+  background: #f9fafb;
+  font-style: normal;
+}
+.knowledge-prose pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+.knowledge-prose :not(pre) > code {
+  background: #f3f4f6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+}
+.knowledge-prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.knowledge-prose :is(th, td) {
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+  vertical-align: top;
+  min-width: 6rem;
+}
+.knowledge-prose th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+.knowledge-prose hr {
+  margin: 2rem 0;
+  border-color: #e5e7eb;
+}
+.knowledge-prose img {
+  max-width: 100%;
+  height: auto;
+}

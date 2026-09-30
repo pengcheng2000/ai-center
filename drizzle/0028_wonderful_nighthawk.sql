@@ -1,0 +1,1 @@
+ALTER TABLE `knowledgeItems` MODIFY COLUMN `kind` enum('docx','file','sheet','bitable','shortcut','other') NOT NULL;

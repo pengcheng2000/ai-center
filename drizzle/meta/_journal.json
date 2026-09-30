@@ -190,6 +190,34 @@
       "when": 1788513719039,
       "tag": "0026_kind_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1790670348711,
+      "tag": "0027_ambiguous_morbius",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1790674206561,
+      "tag": "0028_wonderful_nighthawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1790678240622,
+      "tag": "0029_flawless_kang",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1790683369450,
+      "tag": "0030_knowledge_editorial",
+      "breakpoints": true
     }
   ]
 }

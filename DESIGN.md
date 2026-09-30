@@ -5,8 +5,8 @@
 - 本地 MySQL 仅供开发，正式部署使用远程数据库，由 DATABASE_URL 配置；实例类型与容量在部署阶段验证。
 - 保留现有单体后端、业务模型与运营流程，渐进增加 Source → Connector/Reader → 原始快照/附件 → Normalize → 内容副本/版本 → 发布关联 → 多页面消费。
 - 首个 Source 同步整个“AI应用知识库”空间，入口节点为 IDAtwKn8TiaaGLkucKycZAOgn1e；浏览器只用于调研、配置与验收，生产接入只用 OpenAPI。
-- 学习中心增加“知识与案例”栏目；仅发布负责人确认可全员共享的精选内容，员工身份必须可信。自注册或自填部门不构成企业身份。
-- 当前不做 RAG。先完成应用与单篇 POC，再审阅数据库迁移、完整同步和展示实现。
+- 学习中心增加“知识与案例”栏目；本机开发预览允许已登录账号阅读 ready 副本，正式发布由负责人逐篇确认并面向所有已登录账号（含自注册账号）。
+- 当前不做 RAG；飞书 SSO 接入时再收紧正式发布受众。
 
 ## 内容与既有业务关系
 
@@ -14,7 +14,7 @@ Connector 只读取与标准化，不绑定前端路由，不直接发布课程/
 
 课程保留教学编排和学习记录，社区保留员工原创与引用，Skills 保留包结构和审核。逐步给 newsItems、courseMaterials 与 Agent 草稿增加知识版本引用，所有引用遵守统一访问检查。
 
-## 模型建议（尚未迁移）
+## 六表模型（本地已迁移）
 
 | 模型 | 职责 |
 |---|---|
@@ -34,7 +34,7 @@ Connector 只读取与标准化，不绑定前端路由，不直接发布课程/
 
 ## 访问与发布
 
-同步内容默认管理员预览。员工只看负责人确认可全员共享的发布内容，V1 可由管理员核验员工身份，具体字段与流程随展示设计审阅。
+本机开发环境中，真实 socket 来源为 loopback 的已登录账号可以预览最新 ready 内容，无须 Publication，页面须标明未经审核发布。其他访问只读取负责人确认、管理员发布给 `authenticated_users` 的内容；V1 不做人工逐人核验。现有 `users.enterpriseAccessStatus` 等字段保留给未来 SSO，不参与当前知识读取。
 
 列表、标题/摘要、正文、附件、课程引用、首页、搜索与未来检索都检查权限；未知权限默认拒绝。source_inherited 仅在真实 ACL 映射后使用。403、超时或分页失败不视为删除；撤销授权须停止展示、使旧引用失效，轮询不能承诺实时继承飞书 ACL。
 
@@ -94,10 +94,20 @@ Connector 只读取与标准化，不绑定前端路由，不直接发布课程/
 
 ## 阶段与验收
 
-- V1-A：应用、最小权限、资源授权、单篇与全空间目录验证完成；314 Docx 纯文本、17 文件 Range、1 Sheet 和 2 Bitable 样本读取通过。正式 Blocks 保真同步、全量文件/图片复制及存储方案仍待落地。
-- V1-B：整个空间清点；模型审阅后实现副本/版本/附件/同步记录及管理员预览。
-- V1-C：知识与案例、受控精选发布、课程引用及少量国内来源。
-- V2：增量、多 Source、映射、差异审核、普通搜索、身份/权限加强，按需补表格/文件解析。
+- V1-A：应用、最小权限、资源授权、单篇与全空间目录验证完成。
+- V1-B：六表模型、全空间目录/正文同步、内容版本、文件/图片/原始快照、同步记录与管理员预览已实现；少量源端素材权限失败单独记录。
+- V1-C：学习中心“知识与案例”、工作台入口、本机开发预览及逐版本受控发布已实现；真实企业内容仍需负责人逐篇确认后才能正式发布。
+- V2：增量、多 Source、课程/资讯等引用、飞书 SSO/ACL 映射、普通搜索和国内其他来源；现有 RSS 不迁移。
 - Later：Indexer → Chunk → Embedding/Vector DB → 带访问过滤的 Retriever → RAG；保留 block/页码/层级定位，不提前实现。
 
 验收真实正文、节点/块分页、幂等、正文缩短、快捷方式循环、部分失败不误删、凭证脱敏、权限撤销、旧业务 API 访问边界与附件签名；同步更新不静默覆盖已审阅发布版本。
+
+## V1-B / V1-C 实现契约
+
+- Schema 位于 `drizzle/schema.ts`，六张核心表由 `0027` 创建，`0028` 为 `knowledgeItems.kind` 增加 `other`，`0029` 为 Publication 增加 `authenticated_users` 受众。开发库已应用；生产库须单独按发布流程迁移。`0029` 不自动扩大既有 `verified_employees` 发布记录。
+- 正式入口为 `server/routers/knowledge.ts` 的 `knowledge.*`。Feishu POC 保留只读诊断用途并复用正式 Client。Source 只存环境变量引用，不存密钥。
+- 全量同步区分 `directoryTraversalComplete` 与 `contentFetchComplete`：只有目录完整才执行 missing reconciliation；已出现节点的正文/图片失败保留旧版本，且不影响其他缺失节点判断。每个来源持有数据库租约，单项版本经过 tmp → staging → 文件 finalize → ready；启动恢复处理残留 staging。
+- 开发存储使用 `DATA_DIR/storage`。默认单文件 64 MiB、单次运行 512 MiB、附件并发 2，可用 `KNOWLEDGE_MAX_SINGLE_ASSET_BYTES`、`KNOWLEDGE_MAX_ASSET_BYTES_PER_RUN`、`KNOWLEDGE_ASSET_CONCURRENCY` 调整；前两项单位为字节，当前 INT 计数列要求配置不超过 2,147,483,647。启动同步前要求可写及预算之外至少 1 GiB 空闲空间。生产必须提供持久卷和备份。
+- 发布固定 `knowledgeContents.id`，一次审批/发布/撤回为一条 `contentPublications` 记录；新版本发布事务撤回旧记录。partial run 中自身完整的 ready 版本可人工发布，整次 run 无须 succeeded。正式访问面向所有已登录账号，审批界面须明确提示包含自注册账号。附件地址绑定用户、资产和访问生命周期：正式访问绑定 Publication，开发预览仅允许本机及当前最新 ready 版本，管理员独立预览使用专属作用域；有效期 1 小时，每次请求复核当前权限。
+- 管理端 `/operations/knowledge` 提供来源、运行历史、目录树、版本预览与审核发布；员工端入口为学习中心 `/learn/knowledge` 和 `/learn/knowledge/:id`。本机开发入口明确标记未经审核发布，非本机及生产工作台仅展示已发布内容。生产周期同步复用 heartbeat，开发环境保持手动同步。
+- 当前 Docx normalizer 版本为 `knowledge-v1.0.3`：`grid/view` 子块按文档顺序线性化，正文与图片进入 canonical Markdown，布局不保真仍明确标记 incomplete；源端未变时可从已保存的 raw snapshot 重建新版本，必要新增资产才重新下载。

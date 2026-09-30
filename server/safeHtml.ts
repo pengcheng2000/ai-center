@@ -5,13 +5,14 @@ const ALLOWED_TAGS = [
 ];
 const COMMON_ATTRIBUTES = ["alt", "class", "colspan", "height", "id", "lang", "loading", "name", "rowspan", "scope", "title", "width"];
 
-function safeUrl(value: string, image = false) {
+function safeUrl(value: string, image = false, allowRemoteImages = true) {
   const candidate = value.trim();
   if (!candidate || /[\u0000-\u001f\u007f]/.test(candidate)) return null;
   try {
     const parsed = new URL(candidate, "https://snapshot.invalid");
     const isRelative = parsed.origin === "https://snapshot.invalid";
     if (image && isRelative && !candidate.startsWith("/api/files/")) return null;
+    if (image && !allowRemoteImages && !isRelative) return null;
     if (!isRelative && !["http:", "https:"].includes(parsed.protocol)) return null;
     if (isRelative && !candidate.startsWith("/")) return null;
     return candidate;
@@ -19,7 +20,7 @@ function safeUrl(value: string, image = false) {
 }
 
 /** Sanitizes untrusted HTML with sanitize-html; the exported API is intentionally stable. */
-export function sanitizeHtmlSnapshot(input: string) {
+export function sanitizeHtmlSnapshot(input: string, options: { allowRemoteImages?: boolean } = {}) {
   return sanitizeHtml(input, {
     allowedTags: ALLOWED_TAGS,
     allowedAttributes: {
@@ -38,7 +39,7 @@ export function sanitizeHtmlSnapshot(input: string) {
         return { tagName: "a", attribs: { ...attribs, target: "_blank", rel: "noreferrer noopener" } };
       },
       img: (_tagName, attribs) => {
-        if (attribs.src && !safeUrl(attribs.src, true)) delete attribs.src;
+        if (attribs.src && !safeUrl(attribs.src, true, options.allowRemoteImages ?? true)) delete attribs.src;
         return { tagName: "img", attribs };
       },
     },
